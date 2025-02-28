@@ -458,7 +458,14 @@ calculated by the estimator. In :code:`ensemble_md`, this has been implemented i
 
 7. MT-REXEE Coordinate Modification
 ===================================
-The MT-REXEE method requires that coordinates for the non-matching dummy atoms between two transformations must be reconstructed in order to swap coordinates.
+The MT-REXEE method requires that coordinates for the non-matching dummy atoms between two transformations must be reconstructed in order to swap coordinates. 
+The default cordinate modification function provided within this package can be selected by adding :code:`modify_coords: default` to your input YAML file. 
+Alternatively, a custom function can be provided by the user. For this explanation we will be using the defualt function to perform a swap between a simulation 
+which features molecule A and a simulation which features molecule B. We first determine which atoms are missing between determines all atoms which are present 
+in molecule A but not in B and vice versa. By definition these atoms must be dummy atoms in their fully non-coupled state when the swap is performed. These 
+missing atoms are then broken up by functional group to create several missing R groups. The alignment is then performed individually for each missing R group 
+as shown in Figure ?. This will provide coordinates for the R groups unique to molecule B consistant with the structure of the common atoms in molecule A and vice 
+versa. This allows new GRO files to be written and the next iteration to be perfomed.
 
 .. figure:: _static/explain_swap_method.png
    :name: Fig. 3

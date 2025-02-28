@@ -4,7 +4,9 @@
 ===============================
 :code:`ensemble_md` provides three command-line interfaces (CLI), including :code:`explore_REXEE`, :code:`run_REXEE` and :code:`analyze_REXEE`.
 :code:`explore_REXEE` helps the user to figure out possible combinations of REXEE parameters, while :code:`run_REXEE` and :code:`analyze_REXEE`
-can be used to perform and analyze REXEE simulations, respectively. Below we provide more details about each of these CLIs.
+can be used to perform and analyze REXEE simulations, respectively. Both :code:`run_REXEE` and :code:`analyze_REXEE` will run with MT-REXEE 
+with changes in the input parameters, but :code:`explore_REXEE` is only functional for single topology REXEE simulations. Below we provide 
+more details about each of these CLIs.
 
 .. _doc_explore_REXEE:
 
@@ -39,7 +41,7 @@ Here is the help message of :code:`run_REXEE`:
 
 ::
 
-    usage: run_REXEE [-h] [-y YAML] [-c CKPT] [-g G_VECS] [-o OUTPUT] [-m MAXWARN]
+    usage: run_REXEE [-h] [-y YAML] [-c CKPT] [-g G_VECS] [-e EQUIL] [-o OUTPUT] [-m MAXWARN]
 
     This CLI runs a REXEE simulation given necessary inputs.
 
@@ -133,8 +135,8 @@ least needs the following four files. (Check :ref:`doc_input_files` for more det
 * One TOP file of the system of interest, as specified in the input YAML file.
 * One MDP template for customizing MDP files for different replicas, as specified in the input YAML file.
 
-Note that multiple GRO/TOP files can be provided to initiate different replicas with different configurations/topologies,
-in which case the number of GRO/TOP files must be equal to the number of replicas.
+Note that multiple GRO/TOP files can be provided to initiate different replicas with different configurations/topologies 
+(like for MT-REXEE), in which case the number of GRO/TOP files must be equal to the number of replicas.
 Also, the MDP template should contain parameters shared by all replicas and define the coupling parameters for all
 intermediate states. Moreover, additional care needs to be taken for specifying some MDP parameters need additional care to be taken, which we describe in
 :ref:`doc_mdp_params`. Lastly, to extend a REXEE simulation, one needs to additionally provide the following
@@ -197,7 +199,34 @@ the CLI :code:`run_REXEE` applies the weight combination scheme using the functi
 and the histogram correction scheme using the function :obj:`.histogram_correction`.
 For more details about correction schemes, please refer to the section :ref:`doc_correction`.
 
-Step 3-4: Set up the input files for the next iteration
+
+Step 3-4: Perform necessary coordinate modification to enable swap (Only for MT-REXEE)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+When running with multiple topologies which may differ in the number and identity of atoms in each simulations one must perform an additional 
+step in order to generate coordinates for those missing atoms. In this step the CLI :code:`run_REXEE` runs the function :obj:`.modify_coords_fn`.
+The :obj:`.modify_coords_fn` can either be the default provided coordinate modification method (:obj:`.default_coords_fn`) or if you prefer to 
+provide your own function that can be specified in the input parameters. If using the default coordinate modification function then some automated 
+topology processing will be performed in order to parse atom connectivity as well as which atoms are different between all swappable pairs of simulations. 
+This analysis is performed by the :code:`.process_top` function which does the following:
+ - Perform atom mapping between swappable simulations. If we have molecule A and molecule B which both contain a benzene ring, the carbons in that ring may 
+   differ in atom name between the two molecules. If, during system preparation, you ensure that the only difference in atom namming is the addition of 'D' or 'V'
+   to designiate dummy or virtual atoms then this mapping can be performed automatically using :obj: `coordinate_swap.create_atom_map`. Otherwise a CSV file named 'atom_name_mapping.csv' should be provided. 
+   The details on the syntax of this file can be found below and an example is provided in the MT-REXEE example.
+ - The residue connectivity is parsed from the input topology files to extract the name and number of atoms in the residue of interest which have covalent bonds. 
+   This will later be utilized to fix breaks across the periodic boundary. This step produces a file named 'residue_connect.csv' which can be examined to ensure 
+   no mistakes were made and modified as desired.
+ - Lastly a swap map is determined for swaps between all specified potentially swappable simulations. This swap map breaks-up missing atoms into distinct R groups 
+   and determined which reference atoms will be used during alignment. This produces a human-readable file 'residue_swap_map.csv' which can also be examined for errors 
+   and modified as desired.
+
+The default coordinate modification function does the following:
+
+ - Extract coordinates in high precision from the trajectory files.
+ - Fix any breaks across the periodic boundaries in the residue of interest.
+ - Align segments of the residue for which coordinates are being reconstructed in order to obtain locations for missing dummy atoms.
+ - Write new gro files containing the reconstructed coordinates for miss-matching dummy atoms.
+
+Step 3-5: Set up the input files for the next iteration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 After the final configuration has been figured out by :obj:`.get_swapping_pattern` (and the weights/counts have been adjusted by the specified correction schemes, if any),
 the CLI :code:`run_REXEE` sets up input files for the next iteration. In principle, the new iteration should inherit the final
@@ -268,6 +297,7 @@ include parameters for data analysis here.
       For the CLI :code:`run_REXEE` to work, here is the predefined contract for the module/function based on the assumptions :code:`run_REXEE` makes.
       Modules/functions not obeying the contract are unlikely to work.
 
+        - Selecting :code:`default` will utilize the built-in modification function.
         - Multiple functions can be defined in the module, but the function for coordinate manipulation must have the same name as the module itself.
         - The function must only have two compulsory arguments, which are the two GRO files to be modified. The function must not depend on the order of the input GRO files. 
         - The function must return :code:`None` (i.e., no return value). 
@@ -461,8 +491,8 @@ MDP parameters:
     - If you want to explicitly specify a reference distance (:code:`d`) to use for all iterations, simply use 
       :code:`pull_coord1_start = no` with :code:`pull_coord1_init = d` in your input MDP template.
 
-5. Some rules of thumb
-======================
+5. Some rules of thumb for REXEE
+================================
 Here are some rules of thumb for specifying some key YAML parameters, as discussed/concluded from our paper [Hsu2024]_.
 
 - **Number of replicas** (:code:`n_sim`): Just like other replica exchange methods, it is generally recommended that the number of replicas be
@@ -522,3 +552,21 @@ Here are some rules of thumb for specifying some key YAML parameters, as discuss
   enabled by YAML parameters :code:`w_combine`, :code:`N_cutoff`, and :code:`hist_corr`, respectively. To converge alchemical weights, we recommend
   just using weight-updating EE simulations, or weight-updating REXEE simulations without any correction schemes, i.e., using default values for
   these parameters.
+
+6. Some rules of thumb for MT-REXEE
+===================================
+  Though many selections are system specific below are some recommendations:
+
+  - **Number of parallel simulations**: This is entirely system specific and will likely be limited by your available computational resources. We 
+    provide some tips for allocating computational resources effectively on high performance computing resources
+  - **Total number of states**: The total number of states should equal the number of states per simulation * the number of simulations. 
+  - **Number of states per replica**/**State shift**: We recommend optimizing the number of states per simulation using independent expanded ensemble simulations 
+    prior to running your MT-REXEE simulation to minimize use of computational resources.
+  - **Exchange period** (:code:`nst_sim`): The most effective use of MT-REXEE is for simulating groups of transformations for which a high energy barrier exists 
+    for only a subset of these simulations. Thus we recommend generally choosing a longer iteration length to allow for incresed intra-iteration sampling prior to 
+    performing the next swap. There is no lower limit to swapping frequency; however, we have found that with many systems a frequency of less than 10 ps begins to 
+    increase round-trip times rather than decrease.
+
+7. Additional optional input files for MT-REXEE
+===============================================
+If you perform a MT-REXEE simulation for 
