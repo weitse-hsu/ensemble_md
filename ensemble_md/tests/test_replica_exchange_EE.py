@@ -90,7 +90,7 @@ class Test_ReplicaExchangeEE:
         params_dict['n_sim'] = 4  # so params_dict can be read without failing in the assertions below
 
         # 2. Available options
-        check_param_error(params_dict, 'proposal', "The specified proposal scheme is not available. Available options include 'single', 'neighboring', 'exhaustive', 'forced_swap', 'forced_random'.", 'cool', 'exhaustive')  # noqa: E501
+        check_param_error(params_dict, 'proposal', "The specified proposal scheme is not available. Available options include 'single', 'neighboring', 'exhaustive', 'random_range'.", 'cool', 'exhaustive')  # noqa: E501
         check_param_error(params_dict, 'df_method', "The specified free energy estimator is not available. Available options include 'TI', 'BAR', and 'MBAR'.")  # noqa: E501
         check_param_error(params_dict, 'err_method', "The specified method for error estimation is not available. Available options include 'propagate', and 'bootstrap'.")  # noqa: E501
 

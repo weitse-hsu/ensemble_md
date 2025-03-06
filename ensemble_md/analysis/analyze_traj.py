@@ -543,6 +543,7 @@ def plot_state_hist(trajs, state_ranges, fig_name, stack=True, figsize=None, pre
             dir_list = []
             for i in fig_name.split('/')[:-1]:
                 dir_list.append(i)
+                dir_list.append('/')
             dir_path = ''.join(dir_list)
             np.save(f'{dir_path}/hist_data.npy', hist_data)
         else:
