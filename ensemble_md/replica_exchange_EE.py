@@ -471,6 +471,9 @@ class ReplicaExchangeEE:
         else:
             self.modify_coords_fn = None
 
+        # 7-13. A list of the frames actually utilized for the swaps in each iteration.
+        self.track_swap_frame = []
+
         # Step 8. Check the executables
         if analysis is False:
             self.check_gmx_executable()
