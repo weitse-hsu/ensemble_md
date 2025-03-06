@@ -361,7 +361,7 @@ def get_miss_coord(mol_align, mol_ref, name_align, name_ref, df_atom_swap, dir, 
         for a in range(mol_align_select.n_atoms):
             if a != conn0_align:
                 mol_align_select.xyz[0, a, :] = _rotate_point_around_axis(mol_align_select.xyz[0, a, :], mol_ref_select.xyz[0, conn0_ref, :], axis_rot, theta_min)  # noqa: E501
-        
+
         # Add coordinates to df
         for r in range(len(df_atom_swap.index)):
             if df_atom_swap.iloc[r]['Swap'] == dir:

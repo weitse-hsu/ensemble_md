@@ -833,7 +833,7 @@ def plot_transit_time(trajs, N, fig_prefix=None, dt=None, folder='.'):
                     plt.savefig(f'{folder}/hist_{fig_names[t]}', dpi=600)
                 else:
                     plt.savefig(f'{folder}/{fig_prefix}_hist_{fig_names[t]}', dpi=600)
-    #Save to csv
+    # Save to csv
     sim_list, rt_list = [], []
     for n in range(len(t_roundtrip_list)):
         for rt in t_roundtrip_list[n]:
@@ -1350,6 +1350,30 @@ def get_delta_w_updates(log_file, plot=False):
 
 
 def end_states_only_traj(working_dir, n_sim, n_iter, l0_states, l1_states, swap_rep_pattern, ps_per_frame):
+    """
+    Create a trajectory which is a concatenation off all frames for each unique end state.
+
+    Parameters
+    ----------
+    working_dir : str
+        path for the current working directory
+    n_sim : int
+        the number of simulations run
+    n_iter : int
+        the number of iterations run
+    l0_states : list of int
+        the lambda states which correspond to lambda=0
+    l1_states : list of int
+        the lambda states which correspond to lambda=1
+    swap_rep_pattern : list of int
+        the replica swapping pattern which will indicate which end states are common
+    ps_per_frame : float
+        the timestep to convert the time in the GROMACS dh/dl file to frames in the trajecotry
+
+    Returns
+    -------
+    None
+    """
     import pandas as pd
     import os
     import mdtraj as md
@@ -1434,7 +1458,24 @@ def end_states_only_traj(working_dir, n_sim, n_iter, l0_states, l1_states, swap_
                         traj = md.join(traj, traj_add)
             traj.save_xtc(f'{working_dir}/analysis/{state}_{rep}.xtc')
 
+
 def concat_sim_traj(working_dir, n_sim, n_iter):
+    """
+    Create a trajectory which is a concatenation off each iterations trajectory
+
+    Parameters
+    ----------
+    working_dir : str
+        path for the current working directory
+    n_sim : int
+        the number of simulations run
+    n_iter : int
+        the number of iterations run
+
+    Returns
+    -------
+    None
+    """
     import mdtraj as md
     import os
 
@@ -1444,8 +1485,8 @@ def concat_sim_traj(working_dir, n_sim, n_iter):
         else:
             name = 'confout'
 
-        traj = md.load(f'{working_dir}/sim_{rep}/iteration_0/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')
+        traj = md.load(f'{working_dir}/sim_{rep}/iteration_0/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')  # noqa: E501
         for iteration in range(1, n_iter):
-            traj_add = md.load(f'{working_dir}/sim_{rep}/iteration_{iteration}/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')
+            traj_add = md.load(f'{working_dir}/sim_{rep}/iteration_{iteration}/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')  # noqa: E501
             traj = md.join([traj, traj_add])
         traj.save_xtc(f'{working_dir}/analysis/sim{rep}_concat.xtc')

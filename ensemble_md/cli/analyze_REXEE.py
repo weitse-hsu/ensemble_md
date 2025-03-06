@@ -121,7 +121,6 @@ def main():
     print('\nData analysis of the simulation ensemble')
     print('========================================')
 
-
     # Section 1. Analysis based on transitions between state sets
     print('[ Section 1. Analysis based on transitions between state sets/replicas ]')
     section_idx += 1
@@ -182,9 +181,9 @@ def main():
     )
     rmse = analyze_traj.calc_hist_rmse(hist_data, REXEE.state_ranges)
     print(f'The RMSE of accumulated histogram counts of the state index: {rmse:.0f}')
-    
+
     if REXEE.proposal != 'forced_random' and REXEE.proposal != 'forced_swap':  # Need to FIX THIS FOR FORCED-RANDOM
-        # 2-4. Stitch the time series of state index for different replicas 
+        # 2-4. Stitch the time series of state index for different replicas
         if os.path.isfile(args.state_trajs_for_sim) is True:
             print('\n2-4. Reading in the stitched time series of state index for different replicas ...')
             state_trajs_for_sim = np.load(args.state_trajs_for_sim)
@@ -393,8 +392,8 @@ def main():
     if REXEE.free_energy is True:
         section_idx += 1
         print(f'\n[ Section {section_idx}. Free energy calculations ]')
-        
-        if REXEE.modify_coords == False:
+
+        if REXEE.modify_coords is False:
             # 4-1. Subsampling the data
             data_list = []   # either a list of u_nk or a list of dhdl
             if REXEE.df_data_type == 'u_nk':
@@ -411,7 +410,7 @@ def main():
                         data_list, t_idx_list, g_list = data_all[0], data_all[1], data_all[2]
 
             if data_list == []:
-                files_list = [natsort.natsorted(glob.glob(f'sim_{i}/iteration_*/*dhdl*xvg')) for i in range(REXEE.n_sim)]
+                files_list = [natsort.natsorted(glob.glob(f'sim_{i}/iteration_*/*dhdl*xvg')) for i in range(REXEE.n_sim)]  # noqa: E501
                 data_list, t_idx_list, g_list = analyze_free_energy.preprocess_data(files_list, REXEE.temp, REXEE.df_data_type, REXEE.df_spacing)  # noqa: E501
 
                 data_all = [data_list, t_idx_list, g_list]
@@ -496,14 +495,14 @@ def main():
                 print(f'The free energy difference between the coupled and decoupled states: {f[-1]:.3f} +/- {f_err[-1]:.3f} kT')  # noqa: E501
 
                 if REXEE.df_ref is not None:
-                    rmse_list = analyze_free_energy.calculate_df_rmse(estimators, REXEE.df_ref, REXEE.state_ranges[sim])
+                    rmse_list = analyze_free_energy.calculate_df_rmse(estimators, REXEE.df_ref, REXEE.state_ranges[sim])  # noqa: E501
                     for i in range(REXEE.n_sim):
                         print(f'RMSE of the free energy profile for alchemical range {i} (states {REXEE.state_ranges[i][0]} to {REXEE.state_ranges[i][-1]}): {rmse_list[i]:.2f} kT')  # noqa: E501
 
                 # 4-3. Recalculate the free energy profile if subsampling_avg is True
                 if REXEE.subsampling_avg is True:
                     print('\nUsing averaged start index of the equilibrated data and the avearged statistic inefficiency to re-perform free energy calculations ...')  # noqa: E501
-                    t_avg = int(np.mean(t_idx_list)) + 1   # Using the ceiling function to be a little more conservative
+                    t_avg = int(np.mean(t_idx_list)) + 1   # Using the ceiling function to be a little more conservative  # noqa: E501
                     g_avg = np.array(g_list).prod() ** (1/len(g_list))  # geometric mean
                     print(f'Averaged start index: {t_avg}')
                     print(f'Averaged statistical inefficiency: {g_avg:.2f}')
@@ -515,14 +514,14 @@ def main():
 
                     f, f_err, estimators = analyze_free_energy.calculate_free_energy(data_list, REXEE.state_ranges[sim], REXEE.df_method, REXEE.err_method, REXEE.n_bootstrap, REXEE.seed)  # noqa: E501
                     print('Plotting the full-range free energy profile ...')
-                    analyze_free_energy.plot_free_energy(f, f_err, f'{args.dir}/free_energy_profile_avg_subsampling_{sim}.png')
+                    analyze_free_energy.plot_free_energy(f, f_err, f'{args.dir}/free_energy_profile_avg_subsampling_{sim}.png')  # noqa: E501
 
                     print('The full-range free energy profile averaged over all replicas:')
                     print(f"  {', '.join(f'{f[i]:.3f} +/- {f_err[i]:.3f} kT' for i in range(REXEE.n_tot))}")
                     print(f'The free energy difference between the coupled and decoupled states: {f[-1]:.3f} +/- {f_err[-1]:.3f} kT')  # noqa: E501
 
                     if REXEE.df_ref is not None:
-                        rmse_list = analyze_free_energy.calculate_df_rmse(estimators, REXEE.df_ref, REXEE.state_ranges[sim])
+                        rmse_list = analyze_free_energy.calculate_df_rmse(estimators, REXEE.df_ref, REXEE.state_ranges[sim])  # noqa: E501
                         for i in range(REXEE.n_sim):
                             print(f'RMSE of the free energy profile for alchemical range {i} (states {REXEE.state_ranges[i][0]} to {REXEE.state_ranges[i][-1]}): {rmse_list[i]:.2f} kT')  # noqa: E501
 
