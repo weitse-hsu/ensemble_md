@@ -306,12 +306,11 @@ def main():
                 try:
                     if rank == 0:
                         for j in range(len(swap_list)):
-                            if not os.path.exists(f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout_backup.gro') or not os.path.exists(f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout_backup.gro'):  # noqa: E501
-                                print('\nModifying the coordinates of the following output GRO files ...')
-                                # gro_1 and gro_2 are the simlation outputs (that we want to back up) and the inputs to modify_coords  # noqa: E501
-                                gro_1 = f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout.gro'
-                                gro_2 = f'{REXEE.working_dir}/sim_{swap_list[j][1]}/iteration_{i-1}/confout.gro'
-                                print(f'  - {gro_1}\n  - {gro_2}')
+                            print('\nModifying the coordinates of the following output GRO files ...')
+                            # gro_1 and gro_2 are the simlation outputs (that we want to back up) and the inputs to modify_coords  # noqa: E501
+                            gro_1 = f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout.gro'
+                            gro_2 = f'{REXEE.working_dir}/sim_{swap_list[j][1]}/iteration_{i-1}/confout.gro'
+                            print(f'  - {gro_1}\n  - {gro_2}')
 
                             # Check that swap was not performed before checkpoint was created
                             if os.path.exists(gro_1.split('.gro')[0] + '_backup.gro') and os.path.exists(gro_2.split('.gro')[0] + '_backup.gro'):  # noqa: E501
