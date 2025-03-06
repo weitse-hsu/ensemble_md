@@ -1675,6 +1675,7 @@ class ReplicaExchangeEE:
 
         # Print box size
         molB_new.write(molA_file[-1])
+        molB_new.close()
 
         # Print new coordinates to file
         # Reprint preamble text
@@ -1692,6 +1693,7 @@ class ReplicaExchangeEE:
 
         # Print box size
         molA_new.write(molB_file[-1])
+        molA_new.close()
 
         # Rename temp files
         os.rename('A_hybrid_swap.gro', molB_dir + '/confout.gro')
