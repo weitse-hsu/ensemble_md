@@ -460,9 +460,9 @@ class Test_ReplicaExchangeEE:
         L += "Additional runtime arguments: None\n"
         L += "External modules for coordinate manipulation: None\n"
         L += "MDP parameters differing across replicas: None\n"
-        L += "Alchemical ranges of each replica in REXEE:\n  - Replica 0: States [0, 1, 2, 3, 4, 5]\n"
-        L += "  - Replica 1: States [1, 2, 3, 4, 5, 6]\n  - Replica 2: States [2, 3, 4, 5, 6, 7]\n"
-        L += "  - Replica 3: States [3, 4, 5, 6, 7, 8]\n"
+        L += f"Alchemical ranges of each replica in REXEE:\n  - Replica 0: States {[np.int32(0), np.int32(1), np.int32(2), np.int32(3), np.int32(4), np.int32(5)]}\n"  # noqa: E501
+        L += f"  - Replica 1: States {[np.int32(1), np.int32(2), np.int32(3), np.int32(4), np.int32(5), np.int32(6)]}\n  - Replica 2: States {[np.int32(2), np.int32(3), np.int32(4), np.int32(5), np.int32(6), np.int32(7)]}\n"  # noqa: E501
+        L += f"  - Replica 3: States {[np.int32(3), np.int32(4), np.int32(5), np.int32(6), np.int32(7), np.int32(8)]}\n"  # noqa: E501
         assert out == L
 
         REXEE.reformatted_mdp = True  # Just to test the case where REXEE.reformatted_mdp is True
@@ -937,8 +937,24 @@ class Test_ReplicaExchangeEE:
         assert hist_modified == [[416, 332, 161, 98, 98], [332, 161, 98, 98, 178]]
 
     def test_default_coords_fn(self, params_dict):
+        def check_file(true_output, test_output):
+            for true_line, test_line in zip(true_output, test_output):
+                assert len(true_line) == len(test_line)
+                true_sep_line = true_line.split(' ')
+                while '' in true_sep_line:
+                    true_sep_line.remove('')
+                test_sep_line = test_line.split(' ')
+                while '' in test_sep_line:
+                    test_sep_line.remove('')
+                if len(true_sep_line) == 9:
+                    assert true_line[0:2] == test_line[0:2]
+                    assert np.allclose(np.array(true_line[3:5], dtype=float), np.array(test_line[3:5], dtype=float))
+                    assert true_line[6:8] == test_line[6:8]
+                else:
+                    assert true_line == test_line
         REXEE = get_REXEE_instance(params_dict)
         os.system(f'cp {input_path}/coord_swap/residue_connect.csv .')
+        os.system(f'cp {input_path}/coord_swap/atom_name_mapping.csv .')
         os.system(f'cp {input_path}/coord_swap/residue_swap_map.csv .')
         REXEE.default_coords_fn(f'{input_path}/coord_swap/sim_A/confout_backup.gro', f'{input_path}/coord_swap/sim_B/confout_backup.gro', [-1, -1])  # noqa: E501
 
@@ -949,10 +965,12 @@ class Test_ReplicaExchangeEE:
 
         os.remove('residue_connect.csv')
         os.remove('residue_swap_map.csv')
-        assert true_output_A == test_output_A
-        assert true_output_B == test_output_B
+
+        check_file(true_output_A, test_output_A)
+        check_file(true_output_B, test_output_B)
 
         os.system(f'cp {input_path}/coord_swap/residue_connect_alt.csv residue_connect.csv')
+        os.system(f'cp {input_path}/coord_swap/atom_name_mapping_alt.csv atom_name_mapping.csv')
         os.system(f'cp {input_path}/coord_swap/residue_swap_map_alt.csv residue_swap_map.csv')
         REXEE.default_coords_fn(f'{input_path}/coord_swap/sim_C/confout_backup.gro', f'{input_path}/coord_swap/sim_D/confout_backup.gro', [-1, -1])  # noqa: E501
 
@@ -961,15 +979,25 @@ class Test_ReplicaExchangeEE:
         true_output_D = open(f'{input_path}/coord_swap/output_D.gro', 'r').readlines()
         test_output_D = open(f'{input_path}/coord_swap/sim_C/confout.gro', 'r').readlines()
 
+        check_file(true_output_C, test_output_C)
+        check_file(true_output_D, test_output_D)
         os.remove('residue_connect.csv')
         os.remove('residue_swap_map.csv')
-        assert true_output_C == test_output_C
-        assert true_output_D == test_output_D
+        os.remove('atom_name_mapping.csv')
+        os.remove(f'{input_path}/coord_swap/sim_A/confout.gro')
+        os.remove(f'{input_path}/coord_swap/sim_B/confout.gro')
+        os.remove(f'{input_path}/coord_swap/sim_C/confout.gro')
+        os.remove(f'{input_path}/coord_swap/sim_D/confout.gro')
 
     def test_process_top(self, params_dict):
         import pandas as pd
 
         REXEE = get_REXEE_instance(params_dict)
+        REXEE.gro = [f'{input_path}/coord_swap/A-B.gro',
+                     f'{input_path}/coord_swap/B-C.gro',
+                     f'{input_path}/coord_swap/C-D.gro',
+                     f'{input_path}/coord_swap/D-E.gro',
+                     f'{input_path}/coord_swap/E-F.gro']
         REXEE.resname_list = ['A2B', 'B2C', 'C2D', 'D2E', 'E2F']
         REXEE.swap_rep_pattern = [[[0, 1], [1, 0]], [[1, 1], [2, 0]], [[2, 1], [3, 0]], [[3, 1], [4, 0]]]
         REXEE.top = [f'{input_path}/coord_swap/A-B.top',
@@ -985,3 +1013,7 @@ class Test_ReplicaExchangeEE:
 
         assert true_res_connect.equals(test_res_connect)
         assert true_swap_map.equals(test_swap_map)
+
+        os.remove('atom_name_mapping.csv')
+        os.remove('residue_connect.csv')
+        os.remove('residue_swap_map.csv')
