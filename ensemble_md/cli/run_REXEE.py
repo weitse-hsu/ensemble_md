@@ -138,6 +138,7 @@ def main():
                 REXEE.g_vecs = [list(i) for i in np.load(args.g_vecs)]
             if REXEE.fixed_weights is not True and os.path.isfile(args.equil) is True:
                 REXEE.equil = np.load(args.equil)
+                print(f'equil: {REXEE.equil}')
         else:
             start_idx = None
 
@@ -305,7 +306,7 @@ def main():
                 try:
                     if rank == 0:
                         for j in range(len(swap_list)):
-                            if not os.path.exists(f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout_backup.gro') and not os.path.exists(f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout_backup.gro'):  # noqa: E501
+                            if not os.path.exists(f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout_backup.gro') or not os.path.exists(f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout_backup.gro'):  # noqa: E501
                                 print('\nModifying the coordinates of the following output GRO files ...')
                                 # gro_1 and gro_2 are the simlation outputs (that we want to back up) and the inputs to modify_coords  # noqa: E501
                                 gro_1 = f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout.gro'

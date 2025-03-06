@@ -121,6 +121,7 @@ def main():
     print('\nData analysis of the simulation ensemble')
     print('========================================')
 
+
     # Section 1. Analysis based on transitions between state sets
     print('[ Section 1. Analysis based on transitions between state sets/replicas ]')
     section_idx += 1
