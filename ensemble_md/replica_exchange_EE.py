@@ -196,8 +196,8 @@ class ReplicaExchangeEE:
                 self.warnings.append(f'Warning: Parameter "{i}" specified in the input YAML file is not recognizable.')
 
         # Step 4: Check if the parameters in the YAML file are well-defined
-        if self.proposal not in [None, 'single', 'neighboring', 'exhaustive', 'forced_swap', 'forced_random']:  # deprecated option: multiple  # noqa: E501
-            raise ParameterError("The specified proposal scheme is not available. Available options include 'single', 'neighboring', 'exhaustive', 'forced_swap', 'forced_random'.")  # noqa: E501
+        if self.proposal not in [None, 'single', 'neighboring', 'exhaustive', 'random_range']:  # deprecated option: multiple  # noqa: E501
+            raise ParameterError("The specified proposal scheme is not available. Available options include 'single', 'neighboring', 'exhaustive', 'random_range'.")  # noqa: E501
 
         if self.df_method not in [None, 'TI', 'BAR', 'MBAR']:
             raise ParameterError("The specified free energy estimator is not available. Available options include 'TI', 'BAR', and 'MBAR'.")  # noqa: E501
@@ -809,7 +809,7 @@ class ReplicaExchangeEE:
             swappable pairs after an attempted swap is accepted.
         iteration : int
             The iteration number will determine which direction the swaps will be performed. This option is
-            only necessary when using the "forced_swap" proposal scheme.
+            only necessary when using the "random_range" proposal scheme.
 
         Returns
         -------
@@ -834,22 +834,7 @@ class ReplicaExchangeEE:
         n_sim = len(states)
         sim_idx = list(range(n_sim))
         states_for_swap = []
-        if self.proposal == 'forced_swap':
-            potential_swappables = []
-            if iteration % 2 == 0:  # Swap up for self.n_sim - 1 swaps
-                for n in np.arange(0, n_sim-2, 2):
-                    potential_swappables.append([n, n+1])
-            else:  # and then swap down for self.n_sim - 1 swaps and repeat
-                for n in np.arange(1, n_sim-1, 2):
-                    potential_swappables.append([n, n+1])
-            swappables, swap_index = [], []
-            for swap in potential_swappables:
-                index, state = self._deter_swap_index(swap, dhdl_files, self.add_swappables)
-                if len(index) == 2:
-                    swap_index.append(index)
-                    swappables.append(swap)
-                    states_for_swap.append(state)
-        elif self.proposal == 'forced_random':
+        if self.proposal == 'random_range':
             potential_swappables = []
             for n in np.arange(0, n_sim-1, 1):
                 potential_swappables.append([n, n+1])
@@ -934,7 +919,7 @@ class ReplicaExchangeEE:
             This list can be generated :obj:`.extract_final_dhdl_info`.
         iteration : int
             The iteration number will determine which direction the swaps will be performed. This option is only
-            necessary when using the "forced_swap" proposal scheme.
+            necessary when using the "random_range" proposal scheme.
 
         Returns
         -------
@@ -944,10 +929,7 @@ class ReplicaExchangeEE:
             A list of tuples showing the accepted swaps.
         """
         swap_list = []
-        if self.proposal == 'forced_swap':
-            n_ex = int(np.floor(self.n_sim / 2))  # This is the maximum, not necessarily the number that will always be reached.  # noqa
-            swap_index = []
-        elif self.proposal == 'forced_random':
+        if self.proposal == 'random_range':
             swap_index = []
             n_ex = int(np.floor(self.n_sim / 2))  # This is the maximum, not necessarily the number that will always be reached.  # noqa
             n_ex_FR = 0
@@ -983,13 +965,13 @@ class ReplicaExchangeEE:
         swap_index_accept = []
         for i in range(n_ex):
             # Update the list of swappable pairs starting from the 2nd attempted swap for the exhaustive swap method.
-            if (self.proposal == 'exhaustive' or self.proposal == 'forced_swap' or self.proposal == 'forced_random') and i >= 1:  # noqa: E501
+            if (self.proposal == 'exhaustive' or self.proposal == 'random_range') and i >= 1:  # noqa: E501
                 # Note that this should be done regardless of the acceptance/rejection of the previously drawn pairs.
                 # Also note that at this point, swap is still the last attempted swap.
                 swappables = [i for i in swappables if set(i).intersection(set(swap)) == set()]  # noqa: F821
                 print(f'\nRemaining swappable pairs: {swappables}')
 
-            if len(swappables) == 0 and (self.proposal == 'exhaustive' or self.proposal == 'forced_swap' or self.proposal == 'forced_random'):  # noqa: E501
+            if len(swappables) == 0 and (self.proposal == 'exhaustive' or self.proposal == 'random_range'):  # noqa: E501
                 # This should only happen when the method of exhaustive swaps is used.
                 if i == 0:
                     self.n_empty_swappable += 1
@@ -998,13 +980,10 @@ class ReplicaExchangeEE:
             else:
                 if self.proposal == 'exhaustive':
                     n_ex_exhaustive += 1
-                if self.proposal == 'forced_random':
+                if self.proposal == 'random_range':
                     n_ex_FR += 1
 
-                if self.proposal == 'forced_swap':
-                    swap = swappables[0]
-                else:
-                    swap = ReplicaExchangeEE.propose_swap(swappables)
+                swap = ReplicaExchangeEE.propose_swap(swappables)
 
                 print(f'\nProposed swap: {swap}')
                 if swap == []:  # the same as len(swappables) == 0, self.proposal must not be exhaustive if this line is reached.  # noqa: E501
@@ -1013,7 +992,7 @@ class ReplicaExchangeEE:
                     break  # no need to re-identify swappable pairs and draw new samples
                 else:
                     self.n_swap_attempts += 1
-                    if self.verbose is True and self.proposal != 'exhaustive' and self.proposal != 'forced_swap' and self.proposal != 'forced_random':  # noqa: E501
+                    if self.verbose is True and self.proposal != 'exhaustive' and self.proposal != 'random_range':  # noqa: E501
                         print(f'A swap ({i + 1}/{n_ex}) is proposed between the configurations of Simulation {swap[0]} (state {states[swap[0]]}) and Simulation {swap[1]} (state {states[swap[1]]}) ...')  # noqa: E501
 
                     if self.modify_coords_fn is not None:
@@ -1035,7 +1014,7 @@ class ReplicaExchangeEE:
 
                     if swap_bool is True:
                         swap_list.append(swap)
-                        if self.proposal == "forced_swap" or self.proposal == "forced_random":
+                        if self.proposal == "random_range":
                             for p, p_swap in enumerate(all_swappables):
                                 if p_swap == swap:
                                     break
