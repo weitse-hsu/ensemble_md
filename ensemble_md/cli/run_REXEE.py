@@ -139,6 +139,8 @@ def main():
             if REXEE.fixed_weights is not True and os.path.isfile(args.equil) is True:
                 REXEE.equil = np.load(args.equil)
                 print(f'equil: {REXEE.equil}')
+            if REXEE.proposal == 'random_range' and os.path.isfile('track_swap_frame.npy'):
+                REXEE.track_swap_frame = np.load('track_swap_frame.npy')
         else:
             start_idx = None
 
@@ -268,6 +270,16 @@ def main():
                     # In run_REXEE(i, swap_pattern), where the tpr files will be generated, we use the top file at the
                     # level of the simulation (the file that will be shared by all simulations). For the gro file, we
                     # pass swap_pattern to the function to figure it out internally.
+
+                if REXEE.proposal == 'random_range':
+                    # 3-5. Keep track of the frames used for swapping in each trajectory
+                    track_frame = np.full(REXEE.n_sim, -1)
+                    for s in range(len(swap_list)):
+                        swap = swap_list[s]
+                        track_frame[swap[0]] = swap_index[s][0]
+                        track_frame[swap[1]] = swap_index[s][1]
+                    REXEE.track_swap_frame.append(track_frame)
+                    print(track_frame)
             else:
                 swap_pattern, swap_list = None, None
 
@@ -343,6 +355,8 @@ def main():
                 np.save(args.ckpt, REXEE.rep_trajs)
                 if REXEE.fixed_weights is not True:
                     np.save(args.equil, REXEE.equil)
+                if REXEE.proposal == 'random_range':
+                    np.save('track_swap_frame.npy', REXEE.track_swap_frame)
 
     # Save the npy files at the end of the simulation anyway.
     if rank == 0:
