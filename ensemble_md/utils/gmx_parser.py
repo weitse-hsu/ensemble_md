@@ -438,7 +438,7 @@ def deter_atom_order(mol_file, resname):
             split_line.remove('')
         if resname in split_line[0]:
             if len(split_line[1]) > 5:
-                split_line = coordinate_swap.sep_merge(split_line)
+                split_line = coordinate_swap._sep_merge(split_line)
             atom_order.append(split_line[1])
         elif len(atom_order) != 0:
             break
