@@ -178,7 +178,7 @@ def _calculate_df_adjacent(estimators):
     return df_adjacent, df_err_adjacent
 
 
-def _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent=None, err_type="propagate"):
+def _combine_df_adjacent(df_adjacent, state_ranges, n_tot, df_err_adjacent=None, err_type="propagate"):
     """
     An internal function used in :func:`calculate_free_energy` to combine the free energy differences between
     adjacent states in different state ranges using either simple means or inverse-variance weighted means.
@@ -189,6 +189,8 @@ def _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent=None, err_ty
         A list of lists free energy differences between adjacent states for all replicas.
     state_ranges : list
         A list of lists of showing the state indices sampled by each replica.
+    n_tot : int
+        Number of lambda states
     df_err_adjacent : list, Optional
         A list of lists of uncertainties corresponding to the values of :code:`df_adjacent`. Notably, if
         :code:`df_err_adjacent` is :code:`None`, simple means will be used. Otherwise, inverse-variance weighted
@@ -213,7 +215,6 @@ def _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent=None, err_ty
     --------
     :func:`calculate_free_energy`
     """
-    n_tot = state_ranges[-1][-1] + 1
     df, df_err, overlap_bool = [], [], []
     for i in range(n_tot - 1):
         # df_list is a list of free energy difference between sates i and i+1 in different replicas
@@ -307,7 +308,7 @@ def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="prop
         n_tot = state_ranges[-1] + 1
     estimators = _apply_estimators(data, df_method)
     df_adjacent, df_err_adjacent = _calculate_df_adjacent(estimators)
-    df, df_err, overlap_bool = _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent, err_type='propagate')
+    df, df_err, overlap_bool = _combine_df_adjacent(df_adjacent, state_ranges, n_tot, df_err_adjacent, err_type='propagate')
 
     if err_method == 'bootstrap':
         if seed is not None:
@@ -320,7 +321,7 @@ def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="prop
             sampled_data = [sampled_data_all[i].iloc[b * len(data[i]):(b + 1) * len(data[i])] for i in range(n_sim)]
             bootstrap_estimators = _apply_estimators(sampled_data, df_method)
             df_adjacent, df_err_adjacent = _calculate_df_adjacent(bootstrap_estimators)
-            df_sampled, _, overlap_bool = _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent, err_type='propagate')  # doesn't matter what value err_type here is # noqa: E501
+            df_sampled, _, overlap_bool = _combine_df_adjacent(df_adjacent, state_ranges, n_tot, df_err_adjacent, err_type='propagate')  # doesn't matter what value err_type here is # noqa: E501
             df_bootstrap.append(df_sampled)
         error_bootstrap = np.std(df_bootstrap, axis=0, ddof=1)
 
