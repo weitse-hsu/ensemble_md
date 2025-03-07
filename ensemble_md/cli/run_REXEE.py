@@ -140,7 +140,7 @@ def main():
                 REXEE.equil = np.load(args.equil)
                 print(f'equil: {REXEE.equil}')
             if REXEE.proposal == 'random_range' and os.path.isfile('track_swap_frame.npy'):
-                REXEE.track_swap_frame = np.load('track_swap_frame.npy')
+                REXEE.track_swap_frame = list(np.load('track_swap_frame.npy'))
         else:
             start_idx = None
 
