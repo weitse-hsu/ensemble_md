@@ -318,8 +318,8 @@ def main():
                     if rank == 0:
                         # If previous swaps were performed undo them
                         for j in range(REXEE.n_sim):
-                            gro_backup = f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout_backup.gro'
-                            gro = f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout.gro'
+                            gro_backup = f'{REXEE.working_dir}/sim_{j}/iteration_{i-1}/confout_backup.gro'
+                            gro = f'{REXEE.working_dir}/sim_{j}/iteration_{i-1}/confout.gro'
                             if os.path.exists(gro_backup):
                                 os.rename(gro_backup, gro)
                                 
