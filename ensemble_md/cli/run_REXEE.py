@@ -279,7 +279,6 @@ def main():
                         track_frame[swap[0]] = swap_index[s][0]
                         track_frame[swap[1]] = swap_index[s][1]
                     REXEE.track_swap_frame.append(track_frame)
-                    print(track_frame)
             else:
                 swap_pattern, swap_list = None, None
 
@@ -317,6 +316,13 @@ def main():
             if REXEE.modify_coords_fn is not None:
                 try:
                     if rank == 0:
+                        # If previous swaps were performed undo them
+                        for j in range(REXEE.n_sim):
+                            gro_backup = f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout_backup.gro'
+                            gro = f'{REXEE.working_dir}/sim_{swap_list[j][0]}/iteration_{i-1}/confout.gro'
+                            if os.path.exists(gro_backup):
+                                os.rename(gro_backup, gro)
+                                
                         for j in range(len(swap_list)):
                             print('\nModifying the coordinates of the following output GRO files ...')
                             # gro_1 and gro_2 are the simlation outputs (that we want to back up) and the inputs to modify_coords  # noqa: E501
@@ -324,18 +330,14 @@ def main():
                             gro_2 = f'{REXEE.working_dir}/sim_{swap_list[j][1]}/iteration_{i-1}/confout.gro'
                             print(f'  - {gro_1}\n  - {gro_2}')
 
-                            # Check that swap was not performed before checkpoint was created
-                            if os.path.exists(gro_1.split('.gro')[0] + '_backup.gro') and os.path.exists(gro_2.split('.gro')[0] + '_backup.gro'):  # noqa: E501
-                                print('\nSwap already performed')
-                            else:
-                                # Now we rename gro_1 and gro_2 to back them up
-                                gro_1_backup = gro_1.split('.gro')[0] + '_backup.gro'
-                                gro_2_backup = gro_2.split('.gro')[0] + '_backup.gro'
-                                os.rename(gro_1, gro_1_backup)
-                                os.rename(gro_2, gro_2_backup)
+                            # Now we rename gro_1 and gro_2 to back them up
+                            gro_1_backup = gro_1.split('.gro')[0] + '_backup.gro'
+                            gro_2_backup = gro_2.split('.gro')[0] + '_backup.gro'
+                            os.rename(gro_1, gro_1_backup)
+                            os.rename(gro_2, gro_2_backup)
 
-                                # Here we input gro_1_backup and gro_2_backup and modify_coords_fn will save the modified gro files as gro_1 and gro_2  # noqa: E501
-                                REXEE.modify_coords_fn(gro_1_backup, gro_2_backup, swap_index[j])  # the order should not matter  # noqa: E501
+                            # Here we input gro_1_backup and gro_2_backup and modify_coords_fn will save the modified gro files as gro_1 and gro_2  # noqa: E501
+                            REXEE.modify_coords_fn(gro_1_backup, gro_2_backup, swap_index[j])  # the order should not matter  # noqa: E501
                 except Exception:
                     print('\n--------------------------------------------------------------------------\n')
                     print(f'\nAn error occurred on rank 0:\n{traceback.format_exc()}')
