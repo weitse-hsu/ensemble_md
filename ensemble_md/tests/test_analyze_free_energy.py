@@ -186,11 +186,10 @@ def test_combine_df_adjacent():
     df_adjacent = [[1, 3], [4, 6]]
     df_err_adjacent = [[0.1, 0.1], [0.1, 0.1]]
     state_ranges = [[0, 1, 2], [1, 2, 3]]
-    n_tot = state_ranges[-1][-1] + 1
 
     # Test 1: df_err_adjacent is None (in which case err_type is ignored)
     # Note that this test would lead to two harmless RuntimWarnings due to calculations like np.std([1], ddof=1), which return NaN  # noqa: E501
-    results = analyze_free_energy._combine_df_adjacent(df_adjacent, state_ranges, n_tot, None, "propagate")
+    results = analyze_free_energy._combine_df_adjacent(df_adjacent, state_ranges, None, "propagate")
     assert results[0] == [1, 3.5, 6]
     assert math.isnan(results[1][0])
     assert results[1][1] == np.std([3, 4], ddof=1)
@@ -198,14 +197,14 @@ def test_combine_df_adjacent():
     assert results[2] == [False, True, False]
 
     # Test 2: df_err_adjacent is not None and err_type is "std"
-    results = analyze_free_energy._combine_df_adjacent(df_adjacent, state_ranges, n_tot, df_err_adjacent, "std")
+    results = analyze_free_energy._combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent, "std")
     assert results[0] == [1, 3.5, 6]
     np.testing.assert_array_almost_equal(results[1], [0.1, np.std([3, 4], ddof=1), 0.1])
     assert results[2] == [False, True, False]
 
     # Test 3: df_err_adjacent is not None and err_type is "propagate"
     df_err_adjacent = [[0.1, 0.1], [0.2, 0.1]]  # make the errs different so that the weighted mean will not be equal to simple mean  # noqa: E501
-    results = analyze_free_energy._combine_df_adjacent(df_adjacent, state_ranges, n_tot, df_err_adjacent, "propagate")
+    results = analyze_free_energy._combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent, "propagate")
     assert results[0] == [1, utils.weighted_mean([3, 4], [0.1, 0.2])[0], 6]
     assert results[1] == [0.1, utils.weighted_mean([3, 4], [0.1, 0.2])[1], 0.1]
     assert results[2] == [False, True, False]

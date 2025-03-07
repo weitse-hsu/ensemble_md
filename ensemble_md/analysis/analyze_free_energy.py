@@ -178,7 +178,7 @@ def _calculate_df_adjacent(estimators):
     return df_adjacent, df_err_adjacent
 
 
-def _combine_df_adjacent(df_adjacent, state_ranges, n_tot, df_err_adjacent=None, err_type="propagate"):
+def _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent=None, err_type="propagate"):
     """
     An internal function used in :func:`calculate_free_energy` to combine the free energy differences between
     adjacent states in different state ranges using either simple means or inverse-variance weighted means.
@@ -215,6 +215,7 @@ def _combine_df_adjacent(df_adjacent, state_ranges, n_tot, df_err_adjacent=None,
     --------
     :func:`calculate_free_energy`
     """
+    n_tot = state_ranges[-1][-1] + 1
     df, df_err, overlap_bool = [], [], []
     for i in range(n_tot - 1):
         # df_list is a list of free energy difference between sates i and i+1 in different replicas
@@ -248,7 +249,7 @@ def _combine_df_adjacent(df_adjacent, state_ranges, n_tot, df_err_adjacent=None,
     return df, df_err, overlap_bool
 
 
-def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="propagate", n_bootstrap=None, seed=None, MTREXEE=False):
+def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="propagate", n_bootstrap=None, seed=None, MTREXEE=False):  # noqa: E501
     """
     Caculates the averaged free energy profile with the chosen method given :math:`u_{nk}` or :math:`dH/dλ` data
     obtained from all replicas of the REXEE simulation. Available methods include TI, BAR, and MBAR. TI
@@ -307,8 +308,11 @@ def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="prop
     else:
         n_tot = state_ranges[-1] + 1
     estimators = _apply_estimators(data, df_method)
-    df_adjacent, df_err_adjacent = _calculate_df_adjacent(estimators)
-    df, df_err, overlap_bool = _combine_df_adjacent(df_adjacent, state_ranges, n_tot, df_err_adjacent, err_type='propagate')
+    if MTREXEE is False:
+        df_adjacent, df_err_adjacent = _calculate_df_adjacent(estimators)
+        df, df_err, overlap_bool = _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent, err_type='propagate')  # noqa: E501
+    else:
+        df, df_err = _calculate_df_adjacent(estimators)
 
     if err_method == 'bootstrap':
         if seed is not None:
@@ -320,15 +324,18 @@ def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="prop
         for b in range(n_bootstrap):
             sampled_data = [sampled_data_all[i].iloc[b * len(data[i]):(b + 1) * len(data[i])] for i in range(n_sim)]
             bootstrap_estimators = _apply_estimators(sampled_data, df_method)
-            df_adjacent, df_err_adjacent = _calculate_df_adjacent(bootstrap_estimators)
-            df_sampled, _, overlap_bool = _combine_df_adjacent(df_adjacent, state_ranges, n_tot, df_err_adjacent, err_type='propagate')  # doesn't matter what value err_type here is # noqa: E501
+            if MTREXEE is False:
+                df_adjacent, df_err_adjacent = _calculate_df_adjacent(bootstrap_estimators)
+                df_sampled, _, overlap_bool = _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent, err_type='propagate')  # doesn't matter what value err_type here is # noqa: E501
+            else:
+                df_sampled, _ = _calculate_df_adjacent(bootstrap_estimators)
             df_bootstrap.append(df_sampled)
         error_bootstrap = np.std(df_bootstrap, axis=0, ddof=1)
 
         # Replace the value in df_err with value in error_bootstrap if df_err corresponds to
         # the df between overlapping states
         for i in range(n_tot - 1):
-            if overlap_bool[i] is True:
+            if MTREXEE is True or overlap_bool[i] is True:
                 print(f'Replaced the propagated error with the bootstrapped error for states {i} and {i + 1}: {df_err[i]:.5f} -> {error_bootstrap[i]:.5f}.')  # noqa: E501
                 df_err[i] = error_bootstrap[i]
     elif err_method == 'propagate':

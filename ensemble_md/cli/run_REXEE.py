@@ -322,7 +322,7 @@ def main():
                             gro = f'{REXEE.working_dir}/sim_{j}/iteration_{i-1}/confout.gro'
                             if os.path.exists(gro_backup):
                                 os.rename(gro_backup, gro)
-                                
+
                         for j in range(len(swap_list)):
                             print('\nModifying the coordinates of the following output GRO files ...')
                             # gro_1 and gro_2 are the simlation outputs (that we want to back up) and the inputs to modify_coords  # noqa: E501
