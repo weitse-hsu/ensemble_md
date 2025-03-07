@@ -182,7 +182,7 @@ def main():
     rmse = analyze_traj.calc_hist_rmse(hist_data, REXEE.state_ranges)
     print(f'The RMSE of accumulated histogram counts of the state index: {rmse:.0f}')
 
-    if REXEE.proposal != 'forced_random' and REXEE.proposal != 'forced_swap':  # Need to FIX THIS FOR FORCED-RANDOM
+    if REXEE.proposal != 'random_range':  # Need to FIX THIS FOR RANDOM-Range
         # 2-4. Stitch the time series of state index for different replicas
         if os.path.isfile(args.state_trajs_for_sim) is True:
             print('\n2-4. Reading in the stitched time series of state index for different replicas ...')
@@ -485,7 +485,7 @@ def main():
                         pickle.dump(data_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
                 # 4-2. Calculate the free energy profile
-                f, f_err, estimators = analyze_free_energy.calculate_free_energy(data_list, REXEE.state_ranges[sim], REXEE.df_method, REXEE.err_method, REXEE.n_bootstrap, REXEE.seed)  # noqa: E501
+                f, f_err, estimators = analyze_free_energy.calculate_free_energy(data_list, REXEE.state_ranges[sim], REXEE.df_method, REXEE.err_method, REXEE.n_bootstrap, REXEE.seed, MTREXEE=True)  # noqa: E501
 
                 print('Plotting the full-range free energy profile ...')
                 analyze_free_energy.plot_free_energy(f, f_err, f'{args.dir}/free_energy_profile_{sim}.png')

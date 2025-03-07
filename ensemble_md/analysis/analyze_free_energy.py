@@ -247,7 +247,7 @@ def _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent=None, err_ty
     return df, df_err, overlap_bool
 
 
-def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="propagate", n_bootstrap=None, seed=None):
+def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="propagate", n_bootstrap=None, seed=None, MTREXEE=False):
     """
     Caculates the averaged free energy profile with the chosen method given :math:`u_{nk}` or :math:`dH/dλ` data
     obtained from all replicas of the REXEE simulation. Available methods include TI, BAR, and MBAR. TI
@@ -275,6 +275,8 @@ def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="prop
     seed : int, Optional
         The random seed for bootstrapping. Only relevant when :code:`err_method` is :code:`"bootstrap"`.
         The default is :code:`None`.
+    MTREXEE : bool
+        Whether this is a MT-REXEE simulation or not
 
     Returns
     -------
@@ -299,7 +301,10 @@ def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="prop
         >>> f, _, _ = analyze_free_energy.calculate_free_energy(data_list, state_ranges, "MBAR", "propagate")
     """
     n_sim = len(data)
-    n_tot = state_ranges[-1][-1] + 1
+    if MTREXEE is False:
+        n_tot = state_ranges[-1][-1] + 1
+    else:
+        n_tot = state_ranges[-1] + 1
     estimators = _apply_estimators(data, df_method)
     df_adjacent, df_err_adjacent = _calculate_df_adjacent(estimators)
     df, df_err, overlap_bool = _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent, err_type='propagate')
