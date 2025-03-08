@@ -76,6 +76,7 @@ setup(
             'run_REXEE = ensemble_md.cli.run_REXEE:main',
             'analyze_REXEE = ensemble_md.cli.analyze_REXEE:main',
             'explore_REXEE = ensemble_md.cli.explore_REXEE:main',
+            'run_AREXEE = ensemble_md.cli.run_AREXEE:main',
         ],
     },
 

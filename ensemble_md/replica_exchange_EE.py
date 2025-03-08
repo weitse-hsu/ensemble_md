@@ -183,6 +183,8 @@ class ReplicaExchangeEE:
             "err_method": "propagate",
             "n_bootstrap": 50,
             "seed": None,
+            "async": False,
+            "n_sim_queue": 2,
             # "n_ex": 'N^3',   # only active for multiple swaps.
         }
         for i in optional_args:
@@ -205,7 +207,7 @@ class ReplicaExchangeEE:
         if self.err_method not in [None, 'propagate', 'bootstrap']:
             raise ParameterError("The specified method for error estimation is not available. Available options include 'propagate', and 'bootstrap'.")  # noqa: E501
 
-        params_int = ['n_sim', 'n_iter', 's', 'N_cutoff', 'df_spacing', 'n_ckpt', 'n_bootstrap']  # integer parameters  # noqa: E501
+        params_int = ['n_sim', 'n_iter', 's', 'N_cutoff', 'df_spacing', 'n_ckpt', 'n_bootstrap', 'n_sim_queue']  # integer parameters  # noqa: E501
         if self.nst_sim is not None:
             params_int.append('nst_sim')
         """
@@ -224,6 +226,9 @@ class ReplicaExchangeEE:
         for i in params_pos:
             if getattr(self, i) <= 0:
                 raise ParameterError(f"The parameter '{i}' should be positive.")
+
+        if self.n_sim_queue < 2:
+            raise ParameterError("The parameter 'n_sim_queue' should an integer greater than or equal to 2.")
 
         """
         if self.n_ex != 'N^3' and self.n_ex < 0:
