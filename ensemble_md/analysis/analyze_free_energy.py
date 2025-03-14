@@ -249,6 +249,36 @@ def _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent=None, err_ty
     return df, df_err, overlap_bool
 
 
+def _calculate_df(estimators):
+    """
+    An internal function used in :func:`calculate_free_energy` to calculate a list of free energies between adjacent
+    states for all replicas.
+
+    Parameters
+    ----------
+    estimators : list
+        A list of estimators fitting the input data for all replicas. With this, the user
+        can access all the free energies and their associated uncertainties for all states and replicas.
+        In our code, these estimators come from the function :func:`_apply_estimators`.
+
+    Returns
+    -------
+    df : float
+        Free energy differences between for specified replica.
+    df_err : float
+        Uncertainties corresponding to the values in :code:`df`.
+
+    See also
+    --------
+    :func:`calculate_free_energy`
+    """
+    l = np.linspace(0, 1, num=len(estimators[0].index))
+    estimators[0].index = l
+    estimators[0].columns = l
+    est = estimators[0].loc[0, 1]
+    return est
+
+
 def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="propagate", n_bootstrap=None, seed=None, MTREXEE=False):  # noqa: E501
     """
     Caculates the averaged free energy profile with the chosen method given :math:`u_{nk}` or :math:`dH/dλ` data
@@ -308,11 +338,12 @@ def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="prop
     else:
         n_tot = state_ranges[-1] + 1
     estimators = _apply_estimators(data, df_method)
+    print(estimators)
     if MTREXEE is False:
         df_adjacent, df_err_adjacent = _calculate_df_adjacent(estimators)
         df, df_err, overlap_bool = _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent, err_type='propagate')  # noqa: E501
     else:
-        df, df_err = _calculate_df_adjacent(estimators)
+        df, df_err = _calculate_df(estimators)
 
     if err_method == 'bootstrap':
         if seed is not None:
@@ -328,7 +359,7 @@ def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="prop
                 df_adjacent, df_err_adjacent = _calculate_df_adjacent(bootstrap_estimators)
                 df_sampled, _, overlap_bool = _combine_df_adjacent(df_adjacent, state_ranges, df_err_adjacent, err_type='propagate')  # doesn't matter what value err_type here is # noqa: E501
             else:
-                df_sampled, _ = _calculate_df_adjacent(bootstrap_estimators)
+                df_sampled, _ = _calculate_df(bootstrap_estimators)
             df_bootstrap.append(df_sampled)
         error_bootstrap = np.std(df_bootstrap, axis=0, ddof=1)
 
