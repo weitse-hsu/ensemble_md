@@ -1,0 +1,27 @@
+n_sim: 5                     # Number of replica simulations
+n_iter: 1000                 # Number of iterations
+s: 7                        # Shift in λ ranges [e.g. s = 2 if λ_2 = [2, 3, 4] & λ_3 = [4, 5, 6]]
+nst_sim: 20000               # Number of simulation steps for each homogeneous replica
+proposal: 'random_range'
+mdp: 'expanded.mdp'
+add_swappables: [[6, 7], [13, 14], [20, 21], [27, 28]] 
+n_ckpt: 25
+N_cutoff: -1
+w_combine: False    # The method for combining weights. Choices include "None" [unspecified], exp_avg, ...
+runtime_args: {'-ntomp': '4', '-ntmpi': '1'}
+grompp_args: {'-maxwarn': '2'}
+gro: ['A-B.gro', 'B-C.gro', 'C-D.gro', 'D-E.gro', 'E-F.gro'] 
+top: ['A-B.top', 'B-C.top', 'C-D.top', 'D-E.top', 'E-F.top']
+resname_list: ['A2B', 'B2C', 'C2D', 'D2E', 'E2F']
+swap_rep_pattern: [[[0,1],[1,0]], [[1,1],[2,0]], [[2,1],[3,0]], [[3,1],[4,0]]]
+gmx_executable: 'gmx'
+verbose: True
+modify_coords: 'default'
+
+msm: False
+free_energy: True
+df_spacing: 1
+df_method: "MBAR"
+err_method: "propagate"
+n_bootstrap: 50
+seed : null
