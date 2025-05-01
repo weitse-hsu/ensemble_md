@@ -690,9 +690,9 @@ class Test_ReplicaExchangeEE:
         dhdl_files = [
             os.path.join(input_path, f"dhdl/random-range/dhdl_{i}.xvg") for i in range(REXEE.n_sim)
         ]
-        swappables, swap_index, states_for_swap = REXEE.identify_swappable_pairs(states, REXEE.state_ranges, dhdl_files)
-        
-        #assert swappables[0] == [0, 1]
+        swappables, swap_index, states_for_swap = REXEE.identify_swappable_pairs(states, REXEE.state_ranges, dhdl_files)  # noqa: E501
+
+        assert swappables[0] == [0, 1]
         assert swap_index[0][0] in [14, 15, 16]
         assert swap_index[0][1] in [10, 12, 16, 19]
         assert states_for_swap[0] == [6, 7]
@@ -859,7 +859,6 @@ class Test_ReplicaExchangeEE:
         assert swap_bool_1 is False
         assert swap_bool_2 is False
         assert swap_bool_3 is True
-
 
     def test_weight_correction(self, params_dict):
         REXEE = get_REXEE_instance(params_dict)

@@ -274,15 +274,14 @@ def _calculate_df(estimators):
     """
     # Compute FE estimate
     df = estimators[0].delta_f_
-    l = np.linspace(0, 1, num=len(df.index))
+    l = np.linspace(0, 1, num=len(df.index))  # noqa: E741
     df.index = l
     df.columns = l
     est = df.loc[0, 1]
-    print(df)
 
     # Compute FE extimate error
     df_err = estimators[0].d_delta_f_
-    l = np.linspace(0, 1, num=len(df_err.index))
+    l = np.linspace(0, 1, num=len(df_err.index))  # noqa: E741
     df_err.index = l
     df_err.columns = l
     err = df_err.loc[0, 1]
@@ -384,7 +383,7 @@ def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="prop
         pass
     else:
         raise ParameterError('Specified err_method not available.')
-    
+
     if MTREXEE is False:
         df.insert(0, 0)
         df_err.insert(0, 0)
