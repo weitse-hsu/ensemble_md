@@ -677,10 +677,11 @@ class Test_ReplicaExchangeEE:
         assert states_for_swap == []
 
         # Case 4: Random Range
+        REXEE = get_REXEE_instance(params_dict)
         REXEE.proposal = 'random_range'
         REXEE.state_ranges = [list(range(i, i + 7)) for i in [0, 7, 14, 21]]
-        states = [[6, 7], [13, 14], [20, 21]]
-        REXEE = get_REXEE_instance(params_dict)
+        states = [5, 7, 13, 25]
+        REXEE.add_swappables = [[6, 7], [13, 14], [20, 21]]
         REXEE.n_tot = 28
         REXEE.s = 7
         REXEE.template['nstdhdl'] = 100
@@ -692,7 +693,7 @@ class Test_ReplicaExchangeEE:
         ]
         swappables, swap_index, states_for_swap = REXEE.identify_swappable_pairs(states, REXEE.state_ranges, dhdl_files)  # noqa: E501
 
-        assert swappables[0] == [0, 1]
+        assert swappables == [[0, 1]]
         assert swap_index[0][0] in [14, 15, 16]
         assert swap_index[0][1] in [10, 12, 16, 19]
         assert states_for_swap[0] == [6, 7]
