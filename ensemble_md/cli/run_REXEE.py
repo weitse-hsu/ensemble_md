@@ -104,7 +104,7 @@ def main():
                 os.mkdir(f'{REXEE.working_dir}/sim_{i}')
                 os.mkdir(f'{REXEE.working_dir}/sim_{i}/iteration_0')
                 MDP = REXEE.initialize_MDP(i)
-                MDP.write(f"{REXEE.working_dir}/sim_{i}/iteration_0/expanded.mdp", skipempty=True)
+                MDP.write(f"{REXEE.working_dir}/sim_{i}/iteration_0/{REXEE.mdp}", skipempty=True)
             if REXEE.modify_coords == 'default' and (not os.path.exists('residue_connect.csv') or not os.path.exists('residue_swap_map.csv')):  # noqa: E501
                 REXEE.process_top()
 
@@ -139,6 +139,8 @@ def main():
             if REXEE.fixed_weights is not True and os.path.isfile(args.equil) is True:
                 REXEE.equil = np.load(args.equil)
                 print(f'equil: {REXEE.equil}')
+            if REXEE.proposal == 'random_range' and os.path.isfile('track_swap_frame.npy'):
+                REXEE.track_swap_frame = list(np.load('track_swap_frame.npy'))
         else:
             start_idx = None
 
@@ -263,11 +265,20 @@ def main():
                     os.mkdir(f'{REXEE.working_dir}/sim_{j}/iteration_{i}')
                     if REXEE.fixed_weights is True:
                         counts = None    # So that this should work also for GROMACS version < 2022.5
-                    MDP = REXEE.update_MDP(f"sim_{j}/iteration_{i - 1}/expanded.mdp", j, i, states, wl_delta, weights, counts)   # modify with a new template  # noqa: E501
-                    MDP.write(f"{REXEE.working_dir}/sim_{j}/iteration_{i}/expanded.mdp", skipempty=True)
+                    MDP = REXEE.update_MDP(f"sim_{j}/iteration_{i - 1}/{REXEE.mdp}", j, i, states, wl_delta, weights, counts)   # modify with a new template  # noqa: E501
+                    MDP.write(f"{REXEE.working_dir}/sim_{j}/iteration_{i}/{REXEE.mdp}", skipempty=True)
                     # In run_REXEE(i, swap_pattern), where the tpr files will be generated, we use the top file at the
                     # level of the simulation (the file that will be shared by all simulations). For the gro file, we
                     # pass swap_pattern to the function to figure it out internally.
+
+                if REXEE.proposal == 'random_range':
+                    # 3-5. Keep track of the frames used for swapping in each trajectory
+                    track_frame = np.full(REXEE.n_sim, -1)
+                    for s in range(len(swap_list)):
+                        swap = swap_list[s]
+                        track_frame[swap[0]] = swap_index[s][0]
+                        track_frame[swap[1]] = swap_index[s][1]
+                    REXEE.track_swap_frame.append(track_frame)
             else:
                 swap_pattern, swap_list = None, None
 
@@ -346,6 +357,8 @@ def main():
                 np.save(args.ckpt, REXEE.rep_trajs)
                 if REXEE.fixed_weights is not True:
                     np.save(args.equil, REXEE.equil)
+                if REXEE.proposal == 'random_range':
+                    np.save('track_swap_frame.npy', REXEE.track_swap_frame)
 
     # Save the npy files at the end of the simulation anyway.
     if rank == 0:

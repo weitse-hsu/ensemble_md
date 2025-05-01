@@ -595,7 +595,7 @@ def test_plot_state_hist(mock_plt):
     }
 
     # Clean up
-    os.remove('hist_data.npy')
+    os.remove('ensemble_md/tests/data/hist_data.npy')
 
 
 def test_calc_hist_rmse():

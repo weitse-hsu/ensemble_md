@@ -23,7 +23,7 @@ from matplotlib import rc
 from datetime import datetime
 from deeptime.markov.tools.analysis import is_transition_matrix
 warnings.simplefilter(action='ignore', category=UserWarning)
-
+import pandas as pd
 from ensemble_md.utils import utils  # noqa: E402
 from ensemble_md.utils import gmx_parser  # noqa: E402
 from ensemble_md.analysis import analyze_traj  # noqa: E402
@@ -84,7 +84,7 @@ def initialize(args):
 
 
 def main():
-    t0 = time.time()
+    #t0 = time.time()
     args = initialize(sys.argv[1:])
     warnings.simplefilter(action='ignore', category=RuntimeWarning)
     sys.stdout = utils.Logger(logfile=args.output)
@@ -121,7 +121,6 @@ def main():
     print('\nData analysis of the simulation ensemble')
     print('========================================')
 
-
     # Section 1. Analysis based on transitions between state sets
     print('[ Section 1. Analysis based on transitions between state sets/replicas ]')
     section_idx += 1
@@ -147,6 +146,7 @@ def main():
 #    print('1-3. Calculating the spectral gap of the replica-space transition matrix ...')
 #    spectral_gap, spectral_gap_err, eig_vals = analyze_matrix.calc_spectral_gap(reps_mtx)
 #    print(f'The spectral gap of the replica-space transition matrix: {spectral_gap:.3f}')
+
 
     # Section 2. Analysis based on transitions between states
     print('\n[ Section 2. Analysis based on transitions between states ]')
@@ -182,9 +182,9 @@ def main():
     )
     rmse = analyze_traj.calc_hist_rmse(hist_data, REXEE.state_ranges)
     print(f'The RMSE of accumulated histogram counts of the state index: {rmse:.0f}')
-    
-    if REXEE.proposal != 'forced_random' and REXEE.proposal != 'forced_swap':  # Need to FIX THIS FOR FORCED-RANDOM
-        # 2-4. Stitch the time series of state index for different replicas 
+
+    if REXEE.proposal != 'random_range':  # Need to FIX THIS FOR RANDOM-Range
+        # 2-4. Stitch the time series of state index for different replicas
         if os.path.isfile(args.state_trajs_for_sim) is True:
             print('\n2-4. Reading in the stitched time series of state index for different replicas ...')
             state_trajs_for_sim = np.load(args.state_trajs_for_sim)
@@ -234,21 +234,21 @@ def main():
 
     # 2-9. For each trajectory, calculate the stationary distribution from the overall transition matrix obtained in step 2-2.  # noqa: E501
     print('\n2-9. Calculating the stationary distributions ...')
-    pi_list = [analyze_matrix.calc_equil_prob(mtx) for mtx in mtx_list]
-    if any([x is None for x in pi_list]):
-        pass  # None is in the list
-    else:
-        for i in range(REXEE.n_sim):
-            print(f'   - Trajectory {i}: {", ".join([f"{j:.3f}" for j in pi_list[i].reshape(-1)])}')
-        if len({len(i) for i in pi_list}) == 1:  # all lists in pi_list have the same length
-            print(f'   - Average of the above: {", ".join([f"{i:.3f}" for i in np.mean(pi_list, axis=0).reshape(-1)])}')  # noqa: E501
+    #pi_list = [analyze_matrix.calc_equil_prob(mtx) for mtx in mtx_list]
+    #if any([x is None for x in pi_list]):
+    #    pass  # None is in the list
+    #else:
+    #    for i in range(REXEE.n_sim):
+    #        print(f'   - Trajectory {i}: {", ".join([f"{j:.3f}" for j in pi_list[i].reshape(-1)])}')
+    #    if len({len(i) for i in pi_list}) == 1:  # all lists in pi_list have the same length
+    #        print(f'   - Average of the above: {", ".join([f"{i:.3f}" for i in np.mean(pi_list, axis=0).reshape(-1)])}')  # noqa: E501
 
     # 2-10. Calculate the state index correlation time for each trajectory (this step is more time-consuming one)
-    print('\n2-10. Calculating the state index correlation time ...')
-    tau_list = [(pymbar.timeseries.statistical_inefficiency(state_trajs[i], fast=True) - 1) / 2 * dt_traj for i in range(REXEE.n_sim)]  # noqa: E501
-    for i in range(REXEE.n_sim):
-        print(f'   - Trajectory {i}: {tau_list[i]:.1f} ps')
-    print(f'   - Average of the above: {np.mean(tau_list):.1f} ps (std: {np.std(tau_list, ddof=1):.1f} ps)')
+    #print('\n2-10. Calculating the state index correlation time ...')
+    #tau_list = [(pymbar.timeseries.statistical_inefficiency(state_trajs[i], fast=True) - 1) / 2 * dt_traj for i in range(REXEE.n_sim)]  # noqa: E501
+    #for i in range(REXEE.n_sim):
+    #    print(f'   - Trajectory {i}: {tau_list[i]:.1f} ps')
+    #print(f'   - Average of the above: {np.mean(tau_list):.1f} ps (std: {np.std(tau_list, ddof=1):.1f} ps)')
 
     # 2-11. Calculate transit times for each trajectory
     print('\n2-11. Plotting the average transit times ...')
@@ -393,8 +393,8 @@ def main():
     if REXEE.free_energy is True:
         section_idx += 1
         print(f'\n[ Section {section_idx}. Free energy calculations ]')
-        
-        if REXEE.modify_coords == False:
+
+        if REXEE.modify_coords is False:
             # 4-1. Subsampling the data
             data_list = []   # either a list of u_nk or a list of dhdl
             if REXEE.df_data_type == 'u_nk':
@@ -411,7 +411,7 @@ def main():
                         data_list, t_idx_list, g_list = data_all[0], data_all[1], data_all[2]
 
             if data_list == []:
-                files_list = [natsort.natsorted(glob.glob(f'sim_{i}/iteration_*/*dhdl*xvg')) for i in range(REXEE.n_sim)]
+                files_list = [natsort.natsorted(glob.glob(f'sim_{i}/iteration_*/*dhdl*xvg')) for i in range(REXEE.n_sim)]  # noqa: E501
                 data_list, t_idx_list, g_list = analyze_free_energy.preprocess_data(files_list, REXEE.temp, REXEE.df_data_type, REXEE.df_spacing)  # noqa: E501
 
                 data_all = [data_list, t_idx_list, g_list]
@@ -460,6 +460,7 @@ def main():
                         print(f'RMSE of the free energy profile for alchemical range {i} (states {REXEE.state_ranges[i][0]} to {REXEE.state_ranges[i][-1]}): {rmse_list[i]:.2f} kT')  # noqa: E501
 
         else:  # MT-REXEE means each simulation is a seperate transformation
+            fe_est, fe_err, trans = [],[],[]
             for sim in range(REXEE.n_sim):
                 print(f'Computing Free Energy for Simulation {sim}')
                 # 4-1. Subsampling the data
@@ -486,63 +487,60 @@ def main():
                         pickle.dump(data_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
                 # 4-2. Calculate the free energy profile
-                f, f_err, estimators = analyze_free_energy.calculate_free_energy(data_list, REXEE.state_ranges[sim], REXEE.df_method, REXEE.err_method, REXEE.n_bootstrap, REXEE.seed)  # noqa: E501
+                f, f_err, estimators = analyze_free_energy.calculate_free_energy(data_list, REXEE.state_ranges[sim], REXEE.df_method, REXEE.err_method, REXEE.n_bootstrap, REXEE.seed, MTREXEE=True)  # noqa: E501
 
-                print('Plotting the full-range free energy profile ...')
-                analyze_free_energy.plot_free_energy(f, f_err, f'{args.dir}/free_energy_profile_{sim}.png')
-
-                print('The full-range free energy profile averaged over all replicas:')
-                print(f"  {', '.join(f'{f[i]:.3f} +/- {f_err[i]:.3f} kT' for i in range(REXEE.n_tot))}")
-                print(f'The free energy difference between the coupled and decoupled states: {f[-1]:.3f} +/- {f_err[-1]:.3f} kT')  # noqa: E501
-
-                if REXEE.df_ref is not None:
-                    rmse_list = analyze_free_energy.calculate_df_rmse(estimators, REXEE.df_ref, REXEE.state_ranges[sim])
-                    for i in range(REXEE.n_sim):
-                        print(f'RMSE of the free energy profile for alchemical range {i} (states {REXEE.state_ranges[i][0]} to {REXEE.state_ranges[i][-1]}): {rmse_list[i]:.2f} kT')  # noqa: E501
-
-                # 4-3. Recalculate the free energy profile if subsampling_avg is True
-                if REXEE.subsampling_avg is True:
-                    print('\nUsing averaged start index of the equilibrated data and the avearged statistic inefficiency to re-perform free energy calculations ...')  # noqa: E501
-                    t_avg = int(np.mean(t_idx_list)) + 1   # Using the ceiling function to be a little more conservative
-                    g_avg = np.array(g_list).prod() ** (1/len(g_list))  # geometric mean
-                    print(f'Averaged start index: {t_avg}')
-                    print(f'Averaged statistical inefficiency: {g_avg:.2f}')
-
-                    data_list, t_idx_list, g_list = analyze_free_energy.preprocess_data(files_list, REXEE.temp, REXEE.df_data_type, REXEE.df_spacing, t_avg, g_avg)  # noqa: E501
-                    data_all = [data_list, t_idx_list, g_list]
-                    with open(f'{args.dir}/{REXEE.df_data_type}_data_avg_subsampling_{sim}.pickle', 'wb') as handle:
-                        pickle.dump(data_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-                    f, f_err, estimators = analyze_free_energy.calculate_free_energy(data_list, REXEE.state_ranges[sim], REXEE.df_method, REXEE.err_method, REXEE.n_bootstrap, REXEE.seed)  # noqa: E501
-                    print('Plotting the full-range free energy profile ...')
-                    analyze_free_energy.plot_free_energy(f, f_err, f'{args.dir}/free_energy_profile_avg_subsampling_{sim}.png')
-
-                    print('The full-range free energy profile averaged over all replicas:')
-                    print(f"  {', '.join(f'{f[i]:.3f} +/- {f_err[i]:.3f} kT' for i in range(REXEE.n_tot))}")
-                    print(f'The free energy difference between the coupled and decoupled states: {f[-1]:.3f} +/- {f_err[-1]:.3f} kT')  # noqa: E501
-
-                    if REXEE.df_ref is not None:
-                        rmse_list = analyze_free_energy.calculate_df_rmse(estimators, REXEE.df_ref, REXEE.state_ranges[sim])
-                        for i in range(REXEE.n_sim):
-                            print(f'RMSE of the free energy profile for alchemical range {i} (states {REXEE.state_ranges[i][0]} to {REXEE.state_ranges[i][-1]}): {rmse_list[i]:.2f} kT')  # noqa: E501
+                print(f'The free energy difference between the coupled and decoupled states: {f:.3f} +/- {f_err:.3f} kT')  # noqa: E501
+                fe_est.append(f)
+                fe_err.append(f_err)
+                trans.append(REXEE.resname_list[sim])
+            FE_df = pd.DataFrame({'Transformation': trans, 'FE Estimate': fe_est, 'FE Error': fe_err})
+            FE_df.to_csv(f'{args.dir}/FE_estimates.csv')
 
     # Section 5. Process trajecotries for MT-REXEE
     if REXEE.modify_coords is not None:
         # Section 5.1. Create end-state trajecotries for each simulation
-        print('5.1. Create end-state trajecotries for each simulation')
-        l0, l1, ps_per_frame = gmx_parser.get_end_states(f'{REXEE.working_dir}/sim_0/iteration_0/expanded.mdp')
+        section_idx += 1
+        print(f'\n[ Section {section_idx}. Create end-state trajecotries for each simulation')
+
+        #l0, l1, ps_per_frame = gmx_parser.get_end_states(f'{REXEE.working_dir}/sim_0/iteration_0/expanded.mdp')
         n_sim, n_iter = np.shape(rep_trajs)
-        if REXEE.swap_rep_pattern is None:
-            raise Exception('MT-REXEE trajectory analysis requires swap_rep_pattern to be defined')
-        analyze_traj.end_states_only_traj(REXEE.working_dir, n_sim, n_iter, l0, l1, REXEE.swap_rep_pattern, ps_per_frame)  # noqa: E501
+        #if REXEE.swap_rep_pattern is None:
+        #    raise Exception('MT-REXEE trajectory analysis requires swap_rep_pattern to be defined')
+        #analyze_traj.end_states_only_traj(REXEE.working_dir, n_sim, n_iter, l0, l1, REXEE.swap_rep_pattern, ps_per_frame)  # noqa: E501
 
         # Section 5.2. Create concatenated trajectories for each individual simulation
         print('5.2. Create concatenated trajectories for each individual simulation')
-        analyze_traj.concat_sim_traj(REXEE.working_dir, n_sim, n_iter)
+        analyze_traj.concat_sim_traj(REXEE.working_dir, n_sim, n_iter, REXEE.gro)
+
+        print('5.3. Concatenate dhdl files')
+        for s in range(n_sim):
+            if os.path.exists(f'{args.dir}/sim_{s}.xvg'):
+                continue
+            output_file = open(f'{args.dir}/sim_{s}.xvg', 'w')
+            for i in range(n_iter):
+                input_file = open(f'{REXEE.working_dir}/sim_{s}/iteration_{i}/dhdl.xvg').readlines()
+                if i == 0:
+                    for line in input_file:
+                        output_file.write(line)
+                    time = float(input_file[-1].split(' ')[0])
+                    time_step = np.round(time - float(input_file[-2].split(' ')[0]), 4)
+                else:
+                    skipped_first = False
+                    for line in input_file:
+                        if line[0] != '#' and line[0] != '@':
+                            if skipped_first is False:
+                                skipped_first = True
+                            else:
+                                time += time_step
+                                time_str = f'{time:.4f}'
+                                n = len(line.split(' ')[0])
+                                new_line = time_str + line[n:] 
+                                output_file.write(new_line)
+            output_file.close()
 
     # Section 6. Calculate the time spent in GROMACS (This could take a while.)
     t_wall_tot, t_sync, _ = utils.analyze_REXEE_time()
     print(f'\nTotal wall time GROMACS spent to finish all iterations: {utils.format_time(t_wall_tot)}')
     print(f'Total time spent in syncrhonizing all replicas: {utils.format_time(t_sync)}')
 
-    print(f'\nTime spent on data analysis: {utils.format_time(time.time() - t0)}')
+    #print(f'\nTime spent on data analysis: {utils.format_time(time.time() - t0)}')

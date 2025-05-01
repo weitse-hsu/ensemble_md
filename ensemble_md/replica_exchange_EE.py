@@ -196,8 +196,8 @@ class ReplicaExchangeEE:
                 self.warnings.append(f'Warning: Parameter "{i}" specified in the input YAML file is not recognizable.')
 
         # Step 4: Check if the parameters in the YAML file are well-defined
-        if self.proposal not in [None, 'single', 'neighboring', 'exhaustive', 'forced_swap', 'forced_random']:  # deprecated option: multiple  # noqa: E501
-            raise ParameterError("The specified proposal scheme is not available. Available options include 'single', 'neighboring', 'exhaustive', 'forced_swap', 'forced_random'.")  # noqa: E501
+        if self.proposal not in [None, 'single', 'neighboring', 'exhaustive', 'random_range']:  # deprecated option: multiple  # noqa: E501
+            raise ParameterError("The specified proposal scheme is not available. Available options include 'single', 'neighboring', 'exhaustive', 'random_range'.")  # noqa: E501
 
         if self.df_method not in [None, 'TI', 'BAR', 'MBAR']:
             raise ParameterError("The specified free energy estimator is not available. Available options include 'TI', 'BAR', and 'MBAR'.")  # noqa: E501
@@ -418,7 +418,7 @@ class ReplicaExchangeEE:
 
         # 7-5. A list of sets of state indices
         start_idx = [i * self.s for i in range(self.n_sim)]
-        self.state_ranges = [list(np.arange(i, i + self.n_sub)) for i in start_idx]
+        self.state_ranges = [list(np.arange(i, i + self.n_sub, dtype=np.int32)) for i in start_idx]
 
         # 7-6. A list of time it took to get the weights equilibrated
         self.equil = [-1 for i in range(self.n_sim)]   # -1 means unequilibrated
@@ -470,6 +470,9 @@ class ReplicaExchangeEE:
                     self.modify_coords_fn = getattr(module, module_name)
         else:
             self.modify_coords_fn = None
+
+        # 7-13. A list of the frames actually utilized for the swaps in each iteration.
+        self.track_swap_frame = []
 
         # Step 8. Check the executables
         if analysis is False:
@@ -809,7 +812,7 @@ class ReplicaExchangeEE:
             swappable pairs after an attempted swap is accepted.
         iteration : int
             The iteration number will determine which direction the swaps will be performed. This option is
-            only necessary when using the "forced_swap" proposal scheme.
+            only necessary when using the "random_range" proposal scheme.
 
         Returns
         -------
@@ -834,22 +837,7 @@ class ReplicaExchangeEE:
         n_sim = len(states)
         sim_idx = list(range(n_sim))
         states_for_swap = []
-        if self.proposal == 'forced_swap':
-            potential_swappables = []
-            if iteration % 2 == 0:  # Swap up for self.n_sim - 1 swaps
-                for n in np.arange(0, n_sim-2, 2):
-                    potential_swappables.append([n, n+1])
-            else:  # and then swap down for self.n_sim - 1 swaps and repeat
-                for n in np.arange(1, n_sim-1, 2):
-                    potential_swappables.append([n, n+1])
-            swappables, swap_index = [], []
-            for swap in potential_swappables:
-                index, state = self._deter_swap_index(swap, dhdl_files, self.add_swappables)
-                if len(index) == 2:
-                    swap_index.append(index)
-                    swappables.append(swap)
-                    states_for_swap.append(state)
-        elif self.proposal == 'forced_random':
+        if self.proposal == 'random_range':
             potential_swappables = []
             for n in np.arange(0, n_sim-1, 1):
                 potential_swappables.append([n, n+1])
@@ -934,7 +922,7 @@ class ReplicaExchangeEE:
             This list can be generated :obj:`.extract_final_dhdl_info`.
         iteration : int
             The iteration number will determine which direction the swaps will be performed. This option is only
-            necessary when using the "forced_swap" proposal scheme.
+            necessary when using the "random_range" proposal scheme.
 
         Returns
         -------
@@ -944,10 +932,7 @@ class ReplicaExchangeEE:
             A list of tuples showing the accepted swaps.
         """
         swap_list = []
-        if self.proposal == 'forced_swap':
-            n_ex = int(np.floor(self.n_sim / 2))  # This is the maximum, not necessarily the number that will always be reached.  # noqa
-            swap_index = []
-        elif self.proposal == 'forced_random':
+        if self.proposal == 'random_range':
             swap_index = []
             n_ex = int(np.floor(self.n_sim / 2))  # This is the maximum, not necessarily the number that will always be reached.  # noqa
             n_ex_FR = 0
@@ -983,13 +968,13 @@ class ReplicaExchangeEE:
         swap_index_accept = []
         for i in range(n_ex):
             # Update the list of swappable pairs starting from the 2nd attempted swap for the exhaustive swap method.
-            if (self.proposal == 'exhaustive' or self.proposal == 'forced_swap' or self.proposal == 'forced_random') and i >= 1:  # noqa: E501
+            if (self.proposal == 'exhaustive' or self.proposal == 'random_range') and i >= 1:  # noqa: E501
                 # Note that this should be done regardless of the acceptance/rejection of the previously drawn pairs.
                 # Also note that at this point, swap is still the last attempted swap.
                 swappables = [i for i in swappables if set(i).intersection(set(swap)) == set()]  # noqa: F821
                 print(f'\nRemaining swappable pairs: {swappables}')
 
-            if len(swappables) == 0 and (self.proposal == 'exhaustive' or self.proposal == 'forced_swap' or self.proposal == 'forced_random'):  # noqa: E501
+            if len(swappables) == 0 and (self.proposal == 'exhaustive' or self.proposal == 'random_range'):  # noqa: E501
                 # This should only happen when the method of exhaustive swaps is used.
                 if i == 0:
                     self.n_empty_swappable += 1
@@ -998,13 +983,10 @@ class ReplicaExchangeEE:
             else:
                 if self.proposal == 'exhaustive':
                     n_ex_exhaustive += 1
-                if self.proposal == 'forced_random':
+                if self.proposal == 'random_range':
                     n_ex_FR += 1
 
-                if self.proposal == 'forced_swap':
-                    swap = swappables[0]
-                else:
-                    swap = ReplicaExchangeEE.propose_swap(swappables)
+                swap = ReplicaExchangeEE.propose_swap(swappables)
 
                 print(f'\nProposed swap: {swap}')
                 if swap == []:  # the same as len(swappables) == 0, self.proposal must not be exhaustive if this line is reached.  # noqa: E501
@@ -1013,7 +995,7 @@ class ReplicaExchangeEE:
                     break  # no need to re-identify swappable pairs and draw new samples
                 else:
                     self.n_swap_attempts += 1
-                    if self.verbose is True and self.proposal != 'exhaustive' and self.proposal != 'forced_swap' and self.proposal != 'forced_random':  # noqa: E501
+                    if self.verbose is True and self.proposal != 'exhaustive' and self.proposal != 'random_range':  # noqa: E501
                         print(f'A swap ({i + 1}/{n_ex}) is proposed between the configurations of Simulation {swap[0]} (state {states[swap[0]]}) and Simulation {swap[1]} (state {states[swap[1]]}) ...')  # noqa: E501
 
                     if self.modify_coords_fn is not None:
@@ -1035,7 +1017,7 @@ class ReplicaExchangeEE:
 
                     if swap_bool is True:
                         swap_list.append(swap)
-                        if self.proposal == "forced_swap" or self.proposal == "forced_random":
+                        if self.proposal == "random_range":
                             for p, p_swap in enumerate(all_swappables):
                                 if p_swap == swap:
                                     break
@@ -1649,6 +1631,7 @@ class ReplicaExchangeEE:
         # Load the coordinate swapping map
         connection_map = pd.read_csv('residue_connect.csv')
         swap_map = pd.read_csv('residue_swap_map.csv')
+        atom_mapping = pd.read_csv('atom_name_mapping.csv')
 
         # Step 1: Read the GRO input coordinate files and open temporary Output files
         molA_file = open(molA_file_name, 'r').readlines()  # open input file
@@ -1662,7 +1645,7 @@ class ReplicaExchangeEE:
         residue_options = swap_map['Swap A'].to_list() + swap_map['Swap B'].to_list()
         nameA = coordinate_swap.identify_res(molA.topology, residue_options)
         nameB = coordinate_swap.identify_res(molB.topology, residue_options)
-        df_atom_swap = coordinate_swap.find_common(molA_file, molB_file, nameA, nameB)
+        df_atom_swap = coordinate_swap.extract_missing(nameA, nameB, swap_map)
 
         # Step 3: Fix break if present for solvated systems only
         if len(molA.topology.select('water')) != 0:
@@ -1672,12 +1655,8 @@ class ReplicaExchangeEE:
             molB = coordinate_swap.fix_break(molB, nameB, B_dimensions, connection_map[connection_map['Resname'] == nameB])  # noqa: E501
 
         # Step 4: Determine coordinates of atoms which need to be reconstructed as we swap coordinates between molecules  # noqa: E501
-        miss_B = df_atom_swap[(df_atom_swap['Swap'] == 'B2A') & (df_atom_swap['Direction'] == 'miss')]['Name'].to_list()  # noqa: E501
-        miss_A = df_atom_swap[(df_atom_swap['Swap'] == 'A2B') & (df_atom_swap['Direction'] == 'miss')]['Name'].to_list()  # noqa: E501
-        if len(miss_B) != 0:
-            df_atom_swap = coordinate_swap.get_miss_coord(molB, molA, nameB, nameA, df_atom_swap, 'B2A', swap_map[(swap_map['Swap A'] == nameB) & (swap_map['Swap B'] == nameA)])  # noqa: E501
-        if len(miss_A) != 0:
-            df_atom_swap = coordinate_swap.get_miss_coord(molA, molB, nameA, nameB, df_atom_swap, 'A2B', swap_map[(swap_map['Swap A'] == nameA) & (swap_map['Swap B'] == nameB)])  # noqa: E501
+        df_atom_swap = coordinate_swap.get_miss_coord(molB, molA, nameB, nameA, df_atom_swap, 'A2B', swap_map[(swap_map['Swap A'] == nameB) & (swap_map['Swap B'] == nameA)])  # noqa: E501
+        df_atom_swap = coordinate_swap.get_miss_coord(molA, molB, nameA, nameB, df_atom_swap, 'B2A', swap_map[(swap_map['Swap A'] == nameA) & (swap_map['Swap B'] == nameB)])  # noqa: E501
 
         # Step 5: Parse Current file to ensure atoms are added in the correct order
         atom_order_A = gmx_parser.deter_atom_order(molA_file, nameA)
@@ -1685,17 +1664,39 @@ class ReplicaExchangeEE:
 
         # Step 6: Write the new file
         # Reprint preamble text
-        line_start = coordinate_swap.print_preamble(molA_file, molB_new, len(miss_B), len(miss_A))
+        line_start = coordinate_swap.print_preamble(molA_file, molB_new, len(df_atom_swap[df_atom_swap['Swap'] == 'A2B']), len(df_atom_swap[df_atom_swap['Swap'] == 'B2A']))  # noqa: E501
+
+        # Print up until we reach the residue to modify
+        line_restart, atom_num_restart = coordinate_swap.write_unmodified(line_start, molA_file, molB_new, nameA, 1, line_start, copy.deepcopy(molA.xyz[0]))  # noqa: E501
 
         # Print new coordinates to file for molB
-        coordinate_swap.write_new_file(df_atom_swap, 'A2B', 'B2A', line_start, molA_file, molB_new, nameA, nameB, copy.deepcopy(molA.xyz[0]), miss_A, atom_order_B)  # noqa: E501
+        line_restart, atom_num_restart = coordinate_swap.write_modified(df_atom_swap, 'A2B', line_start, molA_file, molB_new, atom_num_restart, nameA, nameB, copy.deepcopy(molA.xyz[0]), atom_mapping, atom_order_B, atom_order_A)  # noqa: E501
+
+        if line_restart is not None:
+            # Print rest of file after modified residue
+            coordinate_swap.write_unmodified(line_restart, molA_file, molB_new, nameA, atom_num_restart, line_start, copy.deepcopy(molA.xyz[0]))  # noqa: E501
+
+        # Print box size
+        molB_new.write(molA_file[-1])
+        molB_new.close()
 
         # Print new coordinates to file
         # Reprint preamble text
-        line_start = coordinate_swap.print_preamble(molB_file, molA_new, len(miss_A), len(miss_B))
+        line_start = coordinate_swap.print_preamble(molB_file, molA_new, len(df_atom_swap[df_atom_swap['Swap'] == 'B2A']), len(df_atom_swap[df_atom_swap['Swap'] == 'A2B']))  # noqa: E501
 
-        # Print new coordinates for molA
-        coordinate_swap.write_new_file(df_atom_swap, 'B2A', 'A2B', line_start, molB_file, molA_new, nameB, nameA, copy.deepcopy(molB.xyz[0]), miss_B, atom_order_A)  # noqa: E501
+        # Print up until we reach the residue to modify
+        line_restart, atom_num_restart = coordinate_swap.write_unmodified(line_start, molB_file, molA_new, nameB, 1, line_start, copy.deepcopy(molB.xyz[0]))  # noqa: E501
+
+        # Print new coordinates to file for molA
+        line_restart, atom_num_restart = coordinate_swap.write_modified(df_atom_swap, 'B2A', line_start, molB_file, molA_new, atom_num_restart, nameB, nameA, copy.deepcopy(molB.xyz[0]), atom_mapping, atom_order_A, atom_order_B)  # noqa: E501
+
+        if line_restart is not None:
+            # Print rest of file after modified residue
+            coordinate_swap.write_unmodified(line_restart, molB_file, molA_new, nameB, atom_num_restart, line_start, copy.deepcopy(molB.xyz[0]))  # noqa: E501
+
+        # Print box size
+        molA_new.write(molB_file[-1])
+        molA_new.close()
 
         # Rename temp files
         os.rename('A_hybrid_swap.gro', molB_dir + '/confout.gro')
@@ -1706,6 +1707,12 @@ class ReplicaExchangeEE:
         Processes the input topologies in order to determine the atoms for alignment in the default GRO swapping
         function. Output as csv files to prevent needing to re-run this step.
         """
+        if not os.path.exists('atom_name_mapping.csv'):
+            coordinate_swap.create_atom_map(self.gro, self.resname_list, self.swap_rep_pattern)
+            atom_name_mapping = pd.read_csv('atom_name_mapping.csv')
+        else:
+            atom_name_mapping = pd.read_csv('atom_name_mapping.csv')
+
         if not os.path.exists('residue_connect.csv'):
             df_top = pd.DataFrame()
             for f, file_name in enumerate(self.top):
@@ -1745,17 +1752,23 @@ class ReplicaExchangeEE:
                 # Determine atoms not present in both molecules
                 X, Y = [int(swap[0][0]), int(swap[1][0])]
                 lam = {X: int(swap[0][1]), Y: int(swap[1][1])}
+                swap_name_match = atom_name_mapping[(atom_name_mapping['resname A'].isin([self.resname_list[X], self.resname_list[Y]])) & (atom_name_mapping['resname B'].isin([self.resname_list[X], self.resname_list[Y]]))]  # noqa: E501
                 for A, B in zip([X, Y], [Y, X]):
+                    # Swapping coordinates from B to A
                     input_A = gmx_parser.read_top(self.top[A], self.resname_list[A])
                     start_line, A_name, A_num, state = coordinate_swap.get_names(input_A, self.resname_list[A])
                     input_B = gmx_parser.read_top(self.top[B], self.resname_list[B])
                     start_line, B_name, B_num, state = coordinate_swap.get_names(input_B, self.resname_list[B])
 
-                    A_only = [x for x in A_name if x not in B_name]
-                    B_only = [x for x in B_name if x not in A_name]
+                    # Determine shared atom names
+                    if len(swap_name_match[swap_name_match['resname A'] == self.resname_list[A]]) != 0:
+                        common_atoms_A = list(swap_name_match['atom name A'].values)
+                    else:
+                        common_atoms_A = list(swap_name_match['atom name B'].values)
+                    A_only = [x for x in A_name if x not in common_atoms_A]
 
                     # Seperate real to dummy switches
-                    df = coordinate_swap.determine_connection(A_only, B_only, self.resname_list[A], self.resname_list[B], df_top, lam[A])  # noqa: E501
+                    df = coordinate_swap.determine_connection(A_only, swap_name_match, self.resname_list[A], self.resname_list[B], df_top, lam[A])  # noqa: E501
 
                     df_map = pd.concat([df_map, df])
 

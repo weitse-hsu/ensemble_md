@@ -106,6 +106,7 @@ def stitch_time_series(files, rep_trajs, shifts=None, dhdl=True, col_idx=-1, sav
     # files_sorted[i] contains the dhdl/plumed output files for starting configuration i sorted
     # based on iteration indices
     files_sorted = [[] for i in range(n_configs)]
+    print(n_iter)
     for i in range(n_configs):
         for j in range(n_iter):
             files_sorted[i].append(files[rep_trajs[i][j]][j])
@@ -185,6 +186,8 @@ def stitch_time_series_for_sim(files, shifts=None, dhdl=True, col_idx=-1, save_n
     :func:`.stitch_time_series`
     :func:`.stitch_xtc_trajs`
     """
+    #if os.path.exists('track_swap_frame.npy'):
+
     n_sim = len(files)      # number of replicas
     n_iter = len(files[0])  # number of iterations per replica
     trajs = [[] for i in range(n_sim)]
@@ -543,6 +546,7 @@ def plot_state_hist(trajs, state_ranges, fig_name, stack=True, figsize=None, pre
             dir_list = []
             for i in fig_name.split('/')[:-1]:
                 dir_list.append(i)
+                dir_list.append('/')
             dir_path = ''.join(dir_list)
             np.save(f'{dir_path}/hist_data.npy', hist_data)
         else:
@@ -833,7 +837,7 @@ def plot_transit_time(trajs, N, fig_prefix=None, dt=None, folder='.'):
                     plt.savefig(f'{folder}/hist_{fig_names[t]}', dpi=600)
                 else:
                     plt.savefig(f'{folder}/{fig_prefix}_hist_{fig_names[t]}', dpi=600)
-    #Save to csv
+    # Save to csv
     sim_list, rt_list = [], []
     for n in range(len(t_roundtrip_list)):
         for rt in t_roundtrip_list[n]:
@@ -1350,6 +1354,30 @@ def get_delta_w_updates(log_file, plot=False):
 
 
 def end_states_only_traj(working_dir, n_sim, n_iter, l0_states, l1_states, swap_rep_pattern, ps_per_frame):
+    """
+    Create a trajectory which is a concatenation off all frames for each unique end state.
+
+    Parameters
+    ----------
+    working_dir : str
+        path for the current working directory
+    n_sim : int
+        the number of simulations run
+    n_iter : int
+        the number of iterations run
+    l0_states : list of int
+        the lambda states which correspond to lambda=0
+    l1_states : list of int
+        the lambda states which correspond to lambda=1
+    swap_rep_pattern : list of int
+        the replica swapping pattern which will indicate which end states are common
+    ps_per_frame : float
+        the timestep to convert the time in the GROMACS dh/dl file to frames in the trajecotry
+
+    Returns
+    -------
+    None
+    """
     import pandas as pd
     import os
     import mdtraj as md
@@ -1434,18 +1462,39 @@ def end_states_only_traj(working_dir, n_sim, n_iter, l0_states, l1_states, swap_
                         traj = md.join(traj, traj_add)
             traj.save_xtc(f'{working_dir}/analysis/{state}_{rep}.xtc')
 
-def concat_sim_traj(working_dir, n_sim, n_iter):
+
+def concat_sim_traj(working_dir, n_sim, n_iter, gro):
+    """
+    Create a trajectory which is a concatenation off each iterations trajectory
+
+    Parameters
+    ----------
+    working_dir : str
+        path for the current working directory
+    n_sim : int
+        the number of simulations run
+    n_iter : int
+        the number of iterations run
+
+    Returns
+    -------
+    None
+    """
     import mdtraj as md
     import os
-
+    from tqdm import tqdm
+    
     for rep in range(n_sim):
-        if os.path.exists(f'{working_dir}/sim_{rep}/iteration_0/confout_backup.gro'):
-            name = 'confout_backup'
-        else:
-            name = 'confout'
-
-        traj = md.load(f'{working_dir}/sim_{rep}/iteration_0/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')
-        for iteration in range(1, n_iter):
-            traj_add = md.load(f'{working_dir}/sim_{rep}/iteration_{iteration}/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')
-            traj = md.join([traj, traj_add])
-        traj.save_xtc(f'{working_dir}/analysis/sim{rep}_concat.xtc')
+        if not os.path.exists(f'{working_dir}/analysis/sim{rep}_concat.xtc'):
+            if os.path.exists(f'{working_dir}/sim_{rep}/iteration_0/confout_backup.gro'):
+                name = 'confout_backup'
+            else:
+                name = 'confout'
+            gro_ref = md.load(f'{working_dir}/{gro[rep]}')
+            traj = md.load(f'{working_dir}/sim_{rep}/iteration_0/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')  # noqa: E501
+            traj.superpose(gro_ref, frame=0)
+            for iteration in tqdm(range(1, n_iter)):
+                traj_add = md.load(f'{working_dir}/sim_{rep}/iteration_{iteration}/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')  # noqa: E501
+                traj_add.superpose(gro_ref, frame=0)
+                traj = md.join([traj, traj_add[1:]])
+            traj.save_xtc(f'{working_dir}/analysis/sim{rep}_concat.xtc')

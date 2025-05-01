@@ -43,12 +43,12 @@ def get_dimensions(file):
     return dim_vector
 
 
-def find_common(molA_file, molB_file, nameA, nameB):
+def extract_missing(nameA, nameB, swap_map):
     """
     Determine the atoms which are common, which are switched between dummy and real atoms,
     and which are unique between the two input molecules.
 
-    Parameters
+    Parameters  <---- CHANGE ME
     ----------
     molA_file : list
         A list of strings containing lines of the GRO file for molecule A.
@@ -65,108 +65,27 @@ def find_common(molA_file, molB_file, nameA, nameB):
         A pandas DataFrame containing the atoms which are not the same between the two molecules
         and how they are changed.
     """
-    # Gather atom names from each file
-    nameA_list, lineA_list, nameB_list, lineB_list = [], [], [], []
-    for l, line in enumerate(molA_file):  # noqa: E741
-        split_line = line.split(' ')
-        while ("" in split_line):
-            split_line.remove("")
-        if len(split_line) > 2:
-            if len(split_line[1]) > 5:
-                split_line = _sep_merge(split_line)
-            if nameA in split_line[0]:
-                nameA_list.append(split_line[1])
-                lineA_list.append(l)
+    # Gather missing atoms for each swap
+    A2B = swap_map[(swap_map['Swap A'] == nameB) & (swap_map['Swap B'] == nameA)]
+    missing_A2B = []
+    for r, row in A2B.iterrows():
+        atoms = row['Missing Atom Name']
+        split_atoms = atoms.split(' ')
+        for a in split_atoms:
+            missing_A2B.append(a)
 
-    for l, line in enumerate(molB_file):  # noqa: E741
-        split_line = line.split(' ')
-        while ("" in split_line):
-            split_line.remove("")
-        if len(split_line) > 2:
-            if len(split_line[1]) > 5:
-                split_line = _sep_merge(split_line)
-            if nameB in split_line[0]:
-                nameB_list.append(split_line[1])
-                lineB_list.append(l)
-
-    # Determine the atom names present in both molecules
-    common_atoms_all = list(set(nameA_list) & set(nameB_list))
+    B2A = swap_map[(swap_map['Swap A'] == nameA) & (swap_map['Swap B'] == nameB)]
+    missing_B2A = []
+    for r, row in B2A.iterrows():
+        atoms = row['Missing Atom Name']
+        split_atoms = atoms.split(' ')
+        for a in split_atoms:
+            missing_B2A.append(a)
 
     # Determine the swaps for each transformation
-    df_A2B = _find_R2D_D2R_miss(nameA_list, nameB_list, common_atoms_all, lineA_list, 'A2B')
-    df_B2A = _find_R2D_D2R_miss(nameB_list, nameA_list, common_atoms_all, lineB_list, 'B2A')
-
-    # Add D2R
-    df = pd.concat([df_A2B, df_B2A])
+    df = pd.concat([pd.DataFrame({'Name': missing_A2B, 'Swap': 'A2B'}), pd.DataFrame({'Name': missing_B2A, 'Swap': 'B2A'})])  # noqa: E501
     df.reset_index(inplace=True)
-    return df
-
-
-def _find_R2D_D2R_miss(name_list, name_other_list, common_atoms, line_list, swap):
-    """
-    Determines which atoms are swapped between dummy and real states and which are missing.
-
-    Parameters
-    ----------
-    name_list : list
-        A list of all the atom names for the atoms in the molecule of interest.
-    name_other_list : list
-        A list of all the atom names for the atoms that the molecule of interest is swapping with.
-    common_atoms : list
-        A list of all the atom names for atoms known to be common between the two molecules.
-    line_list : list
-        A list of the line in the file which corresponds to each atom name in the molecule of interest.
-    swap : str
-        The direction of the swap based on the molecules identified as A and B
-
-    Returns
-    -------
-    df : pandas.DataFrame
-        A pandas DataFrame that contains the following information for each at omthat is no in the common list:
-
-          - The name of the atom,
-          - The atom number
-          - The atom element
-          - Whether the atom is switching between dummy and real or missing,
-          - The swap direction (same as input)
-          - Whether the final atom type is real or dummy
-    """
-    # Determine atoms unique to either molecule
-    names, an_num, elements, directions, swaps, lines, final_type = [], [], [], [], [], [], []
-    for a, atom in enumerate(name_list):
-        element, num, extra = _sep_num_element(atom)
-        if atom not in common_atoms:
-            names.append(atom)
-            an_num.append(num)
-            swaps.append(swap)
-            lines.append(line_list[a])
-            elements.append(f'{element}{extra}')
-
-            if f'D{atom}' in name_other_list or f'{element}V{extra}{num}' in name_other_list:
-                directions.append('R2D')
-                final_type.append('dummy')
-            elif f'{element}{extra}{num}' in name_other_list:
-                directions.append('D2R')
-                final_type.append('real')
-            else:
-                directions.append('miss')
-                if list(atom)[0] == 'D' or (len(list(atom)) > 2 and list(atom)[1] == 'V'):
-                    final_type.append('dummy')
-                else:
-                    final_type.append('real')
-
-    df = pd.DataFrame(
-        {
-            'Name': names,
-            'Atom Name Number': an_num,
-            'Element': elements,
-            'Direction': directions,
-            'Swap': swaps,
-            'File line': lines,
-            'Final Type': final_type
-        }
-    )
-
+    df.drop('index', axis=1, inplace=True)
     return df
 
 
@@ -442,10 +361,10 @@ def get_miss_coord(mol_align, mol_ref, name_align, name_ref, df_atom_swap, dir, 
         for a in range(mol_align_select.n_atoms):
             if a != conn0_align:
                 mol_align_select.xyz[0, a, :] = _rotate_point_around_axis(mol_align_select.xyz[0, a, :], mol_ref_select.xyz[0, conn0_ref, :], axis_rot, theta_min)  # noqa: E501
-        
+
         # Add coordinates to df
         for r in range(len(df_atom_swap.index)):
-            if df_atom_swap.iloc[r]['Direction'] == 'miss' and df_atom_swap.iloc[r]['Swap'] == dir:
+            if df_atom_swap.iloc[r]['Swap'] == dir:
                 for name in miss_names_select:
                     if df_atom_swap.iloc[r]['Name'] == name:
                         a = mol_align_select.topology.select(f'name {name}')
@@ -547,7 +466,7 @@ def print_preamble(old_file, new_file, num_add_names, num_rm_names):
     return line_start
 
 
-def write_line(mol_new, raw_line, line, atom_num, vel, coor, resnum=None, nameB=None):
+def write_line(mol_new, atom_name, atom_num, vel, coor, resnum, nameB):
     """
     Writes a line in the file in which some parameter needs to be changed.
 
@@ -555,49 +474,31 @@ def write_line(mol_new, raw_line, line, atom_num, vel, coor, resnum=None, nameB=
     ----------
     mol_new : file-like object
         A writable file-like object where the formatted molecular data is written.
-    raw_line : str
-        The unseperated and unchanged line.
-    line : list
-        A list of strings representing parsed parts of the input line, such as atom names, numbers, etc.
+    atom_name : str
+        Name of atom to write
     atom_num : int
         The new atom number to be assigned to the atom in this line.
     vel : list
         The list of velocities in the x, y, and z directions to be assigned to the atom in this line.
     coor : list
         The list coordinates in the x, y, and z directions for the atom in this line.
-    resnun : int
+    resnum : int
         The new residue number if it changes. The default is :code:`None`:.
     nameB : str
         The new residue name if if changes from what was in the previous file. The default is :code:`None`:.
     """
     coor = ["{:.7f}".format(coor[0]), "{:.7f}".format(coor[1]), "{:.7f}".format(coor[2])]
-    if len(line) == 9:
-        if nameB is None:
-            mol_new.write(
-                line[0].rjust(8, ' ') +
-                line[1].rjust(7, ' ') +
-                str(atom_num).rjust(5, ' ') +
-                str(coor[0]).rjust(12, ' ') +
-                str(coor[1]).rjust(12, ' ') +
-                str(coor[2]).rjust(12, ' ') +
-                vel[0].rjust(8, ' ') +
-                vel[1].rjust(8, ' ') +
-                vel[2].rjust(9, ' ')
-            )
-        else:
-            mol_new.write(
-                f'{resnum}{nameB}'.rjust(8, ' ') +
-                line[1].rjust(7, ' ') +
-                str(atom_num).rjust(5, ' ') +
-                str(coor[0]).rjust(12, ' ') +
-                str(coor[1]).rjust(12, ' ') +
-                str(coor[2]).rjust(12, ' ') +
-                vel[0].rjust(8, ' ') +
-                vel[1].rjust(8, ' ') +
-                vel[2].rjust(9, ' ')
-            )
-    else:
-        mol_new.write(raw_line)
+    mol_new.write(
+        f'{resnum}{nameB}'.rjust(8, ' ') +
+        atom_name.rjust(7, ' ') +
+        str(atom_num).rjust(5, ' ') +
+        str(coor[0]).rjust(12, ' ') +
+        str(coor[1]).rjust(12, ' ') +
+        str(coor[2]).rjust(12, ' ') +
+        vel[0].rjust(8, ' ') +
+        vel[1].rjust(8, ' ') +
+        vel[2].rjust(9, ' ')
+    )
 
 
 def identify_res(mol_top, resname_options):
@@ -622,108 +523,6 @@ def identify_res(mol_top, resname_options):
             break
 
     return resname
-
-
-def _add_atom(mol_new, resnum, resname, df, vel, atom_num):
-    """
-    Adds a new atom to the GRO file.
-
-    Parameters
-    ----------
-    mol_new : file
-        The temporary file for the new GRO.
-    resnum : int
-        The residue number of the atom being added.
-    resname : str
-        The name of the residue which the atom being added belongs to.
-    df : pandas.DataFrame
-        The master DataFrame which contains the coordinates for the atom being added.
-    vel : list
-        The list of velocities in the x, y, and z directions to be assigned to the atom in this line.
-    atom_num : int
-        The atom number to assign to the atom being added.
-
-    Returns
-    -------
-    atom_num : int
-        The atom number for the next atom in the file.
-    """
-    name_new = df['Name'].to_list()[0]
-    # Reformat coordiantes
-    x_init = df['X Coordinates'].to_list()
-    y_init = df['Y Coordinates'].to_list()
-    z_init = df['Z Coordinates'].to_list()
-    x_temp = np.round(x_init[0], decimals=7)
-    x = format(x_temp, '.7f')
-    y_temp = np.round(y_init[0], decimals=7)
-    y = format(y_temp, '.7f')
-    z_temp = np.round(z_init[0], decimals=7)
-    z = format(z_temp, '.7f')
-    # Write line for new atom
-    mol_new.write(
-        f'{resnum}{resname}'.rjust(8, ' ') +
-        name_new.rjust(7, ' ') +
-        str(atom_num).rjust(5, ' ') +
-        str(x).rjust(12, ' ') +
-        str(y).rjust(12, ' ') +
-        str(z).rjust(12, ' ') +
-        vel[0].rjust(8, ' ') +
-        vel[1].rjust(8, ' ') +
-        vel[2].rjust(9, ' ')
-    )
-    atom_num += 1
-
-    return atom_num
-
-
-def _dummy_real_swap(mol_new, resnum, resname, df, vel, atom_num, orig_coords, name_new):
-    """
-    Adds an atom to the file which is switching between dummy and real state or vice versa.
-
-    Parameters
-    ----------
-    mol_new : file
-        The temporary file for the new GRO.
-    resnum : int
-        The residue number of the atom being added.
-    resname : str
-        The name of the residue which the atom being added belongs to.
-    df : pandas.DataFrame
-        The master DataFrame which contains the coordinates for the atom being added.
-    vel : list of float
-        The list of velocities in the x, y, and z directions to be assigned to the atom in this line.
-    atom_num : int
-        The atom number to assign to the atom being added.
-    orig_coords : list
-        The XYZ coordinates for the atom being added.
-    name_new : str
-        The new name for the atom after the swap
-
-    Returns
-    -------
-    line_num : int
-        Since the atom may be added in a different order than it was in the previous file save the line
-        number so that we skip it when we come to it.
-    """
-    # These may be added out of order so lets make sure we have the right coordinates
-    line_num = df['File line'].to_list()[0]
-    c = line_num - 2
-    orig_coor = orig_coords[c]
-    x, y, z = ["{:.7f}".format(orig_coor[0]), "{:.7f}".format(orig_coor[1]), "{:.7f}".format(orig_coor[2])]
-
-    # Write line
-    mol_new.write(
-        f'{resnum}{resname}'.rjust(8, ' ') +
-        name_new.rjust(7, ' ') +
-        str(atom_num).rjust(5, ' ') +
-        str(x).rjust(12, ' ') +
-        str(y).rjust(12, ' ') +
-        str(z).rjust(12, ' ') +
-        vel[0].rjust(8, ' ') +
-        vel[1].rjust(8, ' ') +
-        vel[2].rjust(9, ' ')
-    )
-    return line_num
 
 
 def _sep_merge(line):
@@ -871,48 +670,7 @@ def _find_rotation_angle(initial_point, vertex, rotated_point, axis):
     return angle
 
 
-def _add_or_swap(df_select, file_new, resnum, resname, vel, atom_num, orig_coor, skip_line, name_new):
-    """
-    Determine if the atom needs added or swapped between real and dummy state and then add the atom to the new file
-
-    Parameters
-    ----------
-    df_select : pandas.DataFrame
-        This dataframe should include only the atom which is currently being added or having it's name swapped.
-    file_new : file-like object
-        The temporary file for the new GRO
-    resnum : int
-        The residue number of the atom being added.
-    resname : str
-        The name of the residue which the atom being added belongs to.
-    vel : list of float
-        The velocity in the x, y, and z directions to assign to the atom being added.
-    atom_num : int
-        The atom number to assign to the atom being added.
-    orig_coords : list of float
-        The XYZ coordinates for the atom being added.
-    skip_line : list
-        A list of line numbers that should be skipped when we come across them while reading the file.
-    name_new : str
-        The new name for the atom after the swap
-
-    Returns
-    -------
-    skip_line : list
-        Updated list of line numbers that should be skipped when we come across them while reading the file.
-    """
-    c = df_select.index.values.tolist()
-
-    if df_select.loc[c[0], 'Direction'] == 'miss':  # Add atom if missing
-        _add_atom(file_new, resnum, resname, df_select, vel, atom_num)
-    else:  # Swap from dummy to real
-        line = _dummy_real_swap(file_new, resnum, resname, df_select, vel, atom_num, orig_coor, name_new)  # Add the dummy atom from A as a real atom in B and save the line so it can be skipped later  # noqa: E501
-        skip_line.append(line)
-
-    return skip_line
-
-
-def write_new_file(df_atom_swap, swap, r_swap, line_start, orig_file, new_file, old_res_name, new_res_name, orig_coords, miss, atom_order):  # noqa: E501
+def write_modified(df_atom_swap, swap, line_start, orig_file, new_file, atom_num_init, old_res_name, new_res_name, orig_coords, atom_mapping, atom_order, old_atom_order):  # noqa: E501
     """
     Writes a new GRO file.
 
@@ -944,132 +702,101 @@ def write_new_file(df_atom_swap, swap, r_swap, line_start, orig_file, new_file, 
     # Add vero velocity to all atoms
     vel = ['0.000', '0.000', '0.000\n']
 
-    atom_num_A, atom_num_B = 0, 0
-    res_interest_atom = 0
-    skip_line = []
-    df_interest = df_atom_swap[((df_atom_swap['Swap'] == swap) & ((df_atom_swap['Direction'] == 'R2D') | (df_atom_swap['Direction'] == 'D2R'))) | ((df_atom_swap['Swap'] == r_swap) & (df_atom_swap['Direction'] == 'miss'))]  # noqa: E501
+    # Determine the direction of the swap
+    if len(atom_mapping[(atom_mapping['resname A'] == old_res_name) & (atom_mapping['resname B'] == new_res_name)]) != 0:  # noqa: E501
+        atom_map = atom_mapping[(atom_mapping['resname A'] == old_res_name) & (atom_mapping['resname B'] == new_res_name)]  # noqa: E501
+        old_res_side = 'A'
+        new_res_side = 'B'
+    else:
+        atom_map = atom_mapping[(atom_mapping['resname B'] == old_res_name) & (atom_mapping['resname A'] == new_res_name)]  # noqa: E501
+        old_res_side = 'B'
+        new_res_side = 'A'
+
+    # Process input lines
+    line, prev_line = _process_line(orig_file, line_start)
+
+    # Seperate resname from resnumber
+    res_i = [*line[0]]
+    resnum = "".join(res_i[:-3])
+
+    line_restart = None
+    atom_num = copy.deepcopy(atom_num_init)
+    for atom in atom_order:
+        # If the atom is not missing
+        if atom in atom_map[f'atom name {new_res_side}'].values:
+            # Determine the name of the equivalent atom in the old file
+            equivalent_atom_name = atom_map[atom_map[f'atom name {new_res_side}'] == atom][f'atom name {old_res_side}'].values[0]  # noqa: E501
+
+            # Determine index of this atom in the old file coordinates
+            coor_index = old_atom_order.index(equivalent_atom_name) + atom_num_init - 1
+
+            write_line(new_file, atom, atom_num, vel, orig_coords[coor_index], resnum, new_res_name)
+        # If the atom is missing
+        else:
+            # Get atom coordinates
+            select_row = df_atom_swap[(df_atom_swap['Swap'] == swap) & (df_atom_swap['Name'] == atom)]
+            x = float(select_row['X Coordinates'].values[0])
+            y = float(select_row['Y Coordinates'].values[0])
+            z = float(select_row['Z Coordinates'].values[0])
+
+            write_line(new_file, atom, atom_num, vel, [x, y, z], resnum, new_res_name)
+        atom_num += 1
+
     for i in range(line_start, len(orig_file)-1):
-        # Some atoms are added out of order from file A and thus must be skipped when they come up
-        if i in skip_line:
-            atom_num_A += 1
-            continue
-        # Iterate atom number to keep track of file progress
-        atom_num_B += 1
-
-        # Account for the fact that the max atom number is 99999
-        if atom_num_B == 100000:
-            atom_num_B = 0
-
         # Process input lines
         line, prev_line = _process_line(orig_file, i)
 
         # Seperate resname from resnumber
         res_i = [*line[0]]
-        prev_res_i = [*prev_line[0]]
-
         resname = "".join(res_i[-3:])
-        resnum = "".join(res_i[0:int(len(res_i)-3)])
-        prev_resname = "".join(prev_res_i[-3:])
 
-        # Determine how to write line based on contents
-        if resname != old_res_name and prev_resname != old_res_name:  # Change only atom number and velocities if atoms not in residue of interest  # noqa: E501
-            write_line(new_file, orig_file[i], line, atom_num_B, vel, orig_coords[atom_num_A])
-        elif resname == old_res_name:  # Atom manipulation required for acyl chain
-            # determine the number for the atom being written in the current line
-            current_element, current_num, current_extra = _sep_num_element(line[1])
-            if line[1] in miss:  # Do not write coordinates if atoms are not present in B
-                atom_num_B -= 1
-                atom_num_A += 1
-                continue
-            elif line[1] == atom_order[res_interest_atom]:  # Just change atom or residue number as needed since atom is in the right order  # noqa: E501
-                write_line(new_file, orig_file[i], line, atom_num_B, vel, orig_coords[atom_num_A], resnum, new_res_name)  # noqa: E501
-                res_interest_atom += 1
-            elif (f'{current_element}{current_extra}{current_num}' == atom_order[res_interest_atom]) or (f'{current_element}V{current_extra}{current_num}' == atom_order[res_interest_atom]) or (f'D{current_element}{current_num}' == atom_order[res_interest_atom]):  # Since atom is not in missing it must be a D2R flip  # noqa: E501
-                df_select = df_interest[df_interest['Name'] == line[1]]
-                skip_line = _add_or_swap(df_select, new_file, resnum, new_res_name, vel, atom_num_B, orig_coords, skip_line, atom_order[res_interest_atom])  # noqa: E501
-                res_interest_atom += 1
-            elif line[1] in atom_order:  # Atom is in the molecule, but there are other atoms before it
-                atom_pos = atom_order.index(line[1])
-                for x in range(res_interest_atom, atom_pos):
-                    df_select = _get_subset_df(df_interest, atom_order[x])
-                    skip_line = _add_or_swap(df_select, new_file, resnum, new_res_name, vel, atom_num_B, orig_coords, skip_line, atom_order[x])  # noqa: E501
-                    atom_num_B += 1
-                    res_interest_atom += 1
-                write_line(new_file, orig_file[i], line, atom_num_B, vel, orig_coords[atom_num_A], resnum, new_res_name)  # noqa: E501
-                res_interest_atom += 1
-            elif (f'{current_element}{current_extra}{current_num}' in atom_order) or (f'{current_element}V{current_extra}{current_num}' in atom_order) or (f'D{current_element}{current_extra}{current_num}' in atom_order):  # Atom is in the molecule, but needs swapped AND there are other atoms before it  # noqa: E501
-                if line[1] in df_interest['Name'].values:
-                    atom_num_B -= 1
-                    atom_num_A += 1
-                    continue
-                else:
-                    if (f'{current_element}{current_extra}{current_num}' in atom_order):
-                        atom_pos = atom_order.index(f'{current_element}{current_extra}{current_num}')
-                    elif (f'{current_element}V{current_extra}{current_num}' in atom_order):
-                        atom_pos = atom_order.index(f'{current_element}V{current_extra}{current_num}')
-                    elif (f'D{current_element}{current_extra}{current_num}' in atom_order):
-                        atom_pos = atom_order.index(f'D{current_element}{current_extra}{current_num}')
-                    df_select = _get_subset_df(df_interest, atom_order[res_interest_atom])
-                    if len(df_select.index) == 0:
-                        atom_num_B -= 1
-                        atom_num_A += 1
-                        continue
-                    else:
-                        for x in range(res_interest_atom, atom_pos):
-                            df_select = _get_subset_df(df_interest, atom_order[x])
-                            skip_line = _add_or_swap(df_select, new_file, resnum, new_res_name, vel, atom_num_B, orig_coords, skip_line, atom_order[x])  # noqa: E501
-                            atom_num_B += 1
-                            res_interest_atom += 1
-                        df_select = df_interest[df_interest['Name'] == line[1]]
-                        skip_line = _add_or_swap(df_select, new_file, resnum, new_res_name, vel, atom_num_B, orig_coords, skip_line, atom_order[res_interest_atom])  # noqa: E501
-                        res_interest_atom += 1
-            else:
-                print(f'Warning {line} not written')
-        elif resname != old_res_name and prev_resname == old_res_name:  # Add dummy atoms at the end of the residue
-            while res_interest_atom < len(atom_order):
-                df_select = _get_subset_df(df_interest, atom_order[res_interest_atom])
-                skip_line = _add_or_swap(df_select, new_file, str(int(resnum)-1), new_res_name, vel, atom_num_B, orig_coords, skip_line, atom_order[res_interest_atom])  # noqa: E501
-                atom_num_B += 1
-                res_interest_atom += 1
-            write_line(new_file, orig_file[i], line, atom_num_B, vel, orig_coords[atom_num_A])
-        else:
-            print(f'Warning line {i+1} not written')
-        atom_num_A += 1
-    atom_num_B += 1
-    while res_interest_atom < len(atom_order):
-        df_select = _get_subset_df(df_interest, atom_order[res_interest_atom])
-        skip_line = _add_or_swap(df_select, new_file, resnum, new_res_name, vel, atom_num_B, orig_coords, skip_line, atom_order[res_interest_atom])  # noqa: E501
-        atom_num_B += 1
-        res_interest_atom += 1
+        # Check if at residue to modify
+        if resname != old_res_name:
+            line_restart = i
+            break
 
-    # Add Box dimensions to file
-    new_file.write(orig_file[-1])
-    new_file.close()
+    return line_restart, atom_num
 
 
-def _get_subset_df(df, atom):
+def write_unmodified(line_start, orig_file, new_file, old_res_name, atom_num, preamble_legth, coords):  # noqa: E501
     """
-    Get the subset df for a particular atom
+    Writes lines before modification to new file
 
     Parameters
     ----------
-    df : pd.DataFrame
-        Full dataframe of interest
-    atom : str
-        Name of the atom of interest
-
-    Returns
-    -------
-    df_select : pd.DataFrame
-        Subset dataframe for only the atom of interest
+    line_start : int
+        The line number where we start reading the file.
+    orig_file : list
+        List of strings containing the content of the pre-swap file to read from.
+    new_file : file-like object
+        Temporary file to write new coordinates.
+    old_res_name : str
+        Residue name from before the swap.
+    atom_num : int
+        Initial atom number on which to start writing
     """
-    x_element, x_num, x_extra = _sep_num_element(atom)
-    if not isinstance(x_num, str):
-        df_select = df[(df['Atom Name Number'].isnull()) & (df['Element'] == f'{x_element}{x_extra}')]
-    else:
-        df_select = df[(df['Atom Name Number'] == str(x_num)) & (df['Element'] == f'{x_element}{x_extra}')]  # noqa: E501
+    vel = ['0.000', '0.000', '0.000\n']
 
-    return df_select
+    line_restart = np.nan
+    for i in range(line_start, len(orig_file)-1):
+        # Process input lines
+        line, prev_line = _process_line(orig_file, i)
+
+        # Seperate resname from resnumber
+        res_i = [*line[0]]
+        resname = "".join(res_i[-3:])
+        resnum = "".join(res_i[:-3])
+        # Check if at residue to modify
+        if resname == old_res_name:
+            line_restart = i
+            atom_num_restart = atom_num
+            break
+        else:
+            coor_index = i - preamble_legth
+            write_line(new_file, line[1], atom_num, vel, coords[coor_index], resnum, resname)
+        atom_num += 1
+    if line_restart is not np.nan:
+        return line_restart, atom_num_restart
 
 
 def _sep_num_element(atom_name):
@@ -1110,7 +837,7 @@ def _sep_num_element(atom_name):
     return element, num, extra
 
 
-def _swap_name(init_atom_names, new_resname, df_top):
+def _swap_name(init_atom_names, new_resname, swap_name_match):
     """
     Determines the corresponding atom name in new molecule
 
@@ -1120,37 +847,26 @@ def _swap_name(init_atom_names, new_resname, df_top):
         A list of atom names in the original molecule.
     new_resname : str
         Resname for the new molecule.
-    df_top : pandas.DataFrame
-        A pandas Dataframe containing the connectivity between the atoms in each molecule.
+    swap_name_match : pd.DataFrame
+        Names for all common atoms in the target molecule and their name in the current molecule
 
     Returns
     -------
     new_atom_names : list
         A list of atom names in the new molecule.
     """
-    # Find all atom names in new moleucle
-    new_names = set(
-        df_top[df_top['Resname'] == new_resname]['Connect 1'].to_list() +
-        df_top[df_top['Resname'] == new_resname]['Connect 1'].to_list() +
-        df_top[df_top['Resname'] == new_resname]['Connect 2'].to_list() +
-        df_top[df_top['Resname'] == new_resname]['Connect 2'].to_list()
-    )
+    if len(swap_name_match[swap_name_match['resname A'] == new_resname]) != 0:
+        new_state = 'A'
+        old_state = 'B'
+    else:
+        old_state = 'A'
+        new_state = 'B'
     new_atom_names = []
     for atom in init_atom_names:
-        if atom in new_names:
-            new_atom_names.append(atom)
-            continue
-        element, atom_num, extra = _sep_num_element(atom)
-        if 'V' in extra:
-            extra = extra.strip('V')
-        if f'{element}V{extra}{atom_num}' in new_names:
-            new_atom_names.append(f'{element}V{extra}{atom_num}')
-        elif f'{element}{extra}{atom_num}' in new_names:
-            new_atom_names.append(f'{element}{extra}{atom_num}')
-        elif f'D{element}{extra}{atom_num}' in new_names:
-            new_atom_names.append(f'D{element}{extra}{atom_num}')
-        else:
+        # Find the atom in the map
+        if len(swap_name_match[swap_name_match[f'atom name {old_state}'] == atom]) == 0:
             raise Exception(f'Compatible atom could not be found for {atom}')
+        new_atom_names.append(swap_name_match[swap_name_match[f'atom name {old_state}'] == atom][f'atom name {new_state}'].values[0])  # noqa: E501
     return new_atom_names
 
 
@@ -1201,16 +917,16 @@ def get_names(input, resname):
     return start_line, atom_name, np.array(atom_num), state
 
 
-def determine_connection(main_only, other_only, main_name, other_name, df_top, main_state):
+def determine_connection(miss, swap_name_match, main_name, other_name, df_top, main_state):
     """
     Determines the connectivity of the missing atoms in the topology.
 
     Parameters
     ----------
-    main_only : list
-        All atoms which can be found only in the molecule of interest.
-    other_only : list
-        All atoms which can be found only in the other molecule.
+    miss : list
+        Names of atoms which are not present in the current molecule but are present in the target molecule
+    swap_name_match : pandas.DataFrame
+        Names for all common atoms in the target molecule and their name in the current molecule
     main_name : str
         resname for the molecule of interest.
     other_name : str
@@ -1229,33 +945,7 @@ def determine_connection(main_only, other_only, main_name, other_name, df_top, m
           - The real anchor atom that connects them
           - The atom to be used to determine the angle to place the missing atoms
     """
-    miss, D2R, R2D = [], [], []
     align_atom, angle_atom = [], []
-    for atom in main_only:
-        raw_element = atom.strip('0123456789')
-        e_split = list(raw_element)
-        if e_split[0] == 'D':
-            real_element = ''.join(e_split[1:])
-        elif len(e_split) > 2 and e_split[1] == 'V':
-            del e_split[1]
-            real_element = ''.join(e_split)
-        else:
-            real_element = raw_element
-        if len(real_element) != 1:
-            element = list(real_element)[0]
-            identifier = ''.join(list(real_element)[1:])
-        else:
-            element = real_element
-            identifier = ''
-        if 'V' in identifier:
-            identifier = identifier.strip('V')
-        num = atom.strip('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-        if f'D{atom}' in other_only or f'{element}V{identifier}{num}' in other_only:
-            D2R.append(atom)
-        elif f'{element}{identifier}{num}' in other_only:
-            R2D.append(atom)
-        else:
-            miss.append(atom)
     df_select = df_top[df_top['Resname'] == main_name]
 
     # Seperate into each seperate functional group to be added
@@ -1277,6 +967,7 @@ def determine_connection(main_only, other_only, main_name, other_name, df_top, m
     # Seperate missing atoms connected to each anchor
     miss_sep, align_atoms, angle_atoms = [], [], []
     for anchor in anchor_atoms:
+        print(f'anchor: {anchor}')
         miss_anchor = []
 
         # Which missing atoms are connected to the anchor
@@ -1295,6 +986,7 @@ def determine_connection(main_only, other_only, main_name, other_name, df_top, m
                     miss.remove(atom)
         included_atoms.remove(anchor)
         miss_sep.append(included_atoms)
+        print(f'miss: {included_atoms}')
 
         # Find atoms connected to the anchor which are real in main state, but dummy when the atoms we are building are real  # noqa: E501
         align_1 = list(df_select[(df_select['Connect 1'] == anchor) & (df_select['State 2'] != main_state) & (df_select['State 2'] != -1)]['Connect 2'].values)  # noqa: E501
@@ -1310,9 +1002,9 @@ def determine_connection(main_only, other_only, main_name, other_name, df_top, m
         angle_atoms.append(angle_atom[-1])
 
     # Now let's figure out what these atoms are called in the other molecule
-    anchor_atoms_B = _swap_name(anchor_atoms, other_name, df_top)
-    angle_atoms_B = _swap_name(angle_atoms, other_name, df_top)
-    align_atoms_B = _swap_name(align_atoms, other_name, df_top)
+    anchor_atoms_B = _swap_name(anchor_atoms, other_name, swap_name_match)
+    angle_atoms_B = _swap_name(angle_atoms, other_name, swap_name_match)
+    align_atoms_B = _swap_name(align_atoms, other_name, swap_name_match)
     df = pd.DataFrame(
         {
             'Swap A': main_name,
@@ -1334,3 +1026,86 @@ def determine_connection(main_only, other_only, main_name, other_name, df_top, m
     df['Missing Atom Name'] = miss_sep_reformat
 
     return df
+
+
+def _read_gro(side, resname_list, gro_list):
+    """
+
+    """
+    name, num = [], []
+    in_res = False
+    [sim_num, l] = side
+    resname = resname_list[sim_num]
+    gro = open(gro_list[sim_num]).readlines()
+    for line in gro:
+        split_line = line.split(' ')
+        while '' in split_line:
+            split_line.remove('')
+        if resname in split_line[0]:
+            in_res = True
+        elif in_res is True:
+            break
+
+        if in_res is True:
+            name.append(split_line[1])
+            num.append(split_line[2])
+
+    return name, num
+
+
+def create_atom_map(gro_list, resname_list, swap_patterns):
+    """
+    If you generate your hybrid topologies in a way that the
+    same atom has the same name in each molecule then this
+    function will create the atom name transformation map.
+
+    Parameters
+    ----------
+    gro_list : list
+        list of input gro file names
+    resname_list : list
+        list of residue names with the transformation
+    swap_patterns : list of list of intergers
+        swapping pattern between simulations
+
+    Returns
+    -------
+    None just creates pandas DataFrame atom_name_mapping.csv
+    """
+    output_df = pd.DataFrame()
+    for swap_pattern in swap_patterns:
+        nameA, numA = _read_gro(swap_pattern[0], resname_list, gro_list)
+        nameB, numB = _read_gro(swap_pattern[1], resname_list, gro_list)
+
+        atomnameA, atomidA, atomnameB, atomidB = [], [], [], []
+        for n, name in enumerate(nameA):
+            if name in nameB:
+                atomnameA.append(name)
+                atomidA.append(numA[n])
+                nb = nameB.index(name)
+                atomnameB.append(name)
+                atomidB.append(numB[nb])
+            element, num, extra = _sep_num_element(name)
+            if f'{element}{num}' in nameB:
+                atomnameA.append(name)
+                atomidA.append(numA[n])
+                nb = nameB.index(f'{element}{num}')
+                atomnameB.append(f'{element}{num}')
+                atomidB.append(numB[nb])
+            elif f'{element}V{num}' in nameB:
+                atomnameA.append(name)
+                atomidA.append(numA[n])
+                nb = nameB.index(f'{element}V{num}')
+                atomnameB.append(f'{element}V{num}')
+                atomidB.append(numB[nb])
+            elif f'D{element}{num}' in nameB:
+                atomnameA.append(name)
+                atomidA.append(numA[n])
+                nb = nameB.index(f'D{element}{num}')
+                atomnameB.append(f'D{element}{num}')
+                atomidB.append(numB[nb])
+
+        df = pd.DataFrame({'resname A': resname_list[swap_pattern[0][0]], 'resname B': resname_list[swap_pattern[1][0]], 'atomid A': atomidA, 'atom name A': atomnameA, 'atomid B': atomidB, 'atom name B': atomnameB})  # noqa: E501
+        output_df = pd.concat([output_df, df])
+    output_df.reindex()
+    output_df.to_csv('atom_name_mapping.csv')

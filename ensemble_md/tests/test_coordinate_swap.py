@@ -43,44 +43,15 @@ def test_get_dimensions():
     os.remove('test.gro')
 
 
-def test_find_common():
-    test_file1 = open(f'{input_path}/coord_swap/sim_A/confout_backup.gro', 'r').readlines()
-    test_file2 = open(f'{input_path}/coord_swap/sim_B/confout_backup.gro', 'r').readlines()
-    test_df = coordinate_swap.find_common(test_file1, test_file2, 'D2E', 'E2F')
-    df = pd.read_csv(f'{input_path}/coord_swap/find_common.csv')
+def test_extract_missing():  # Function changed to extract_missing -- Need to rewrite
+    swap_map = pd.read_csv(f'{input_path}/coord_swap/residue_swap_map.csv')
+    test_df = coordinate_swap.extract_missing('D2E', 'E2F', swap_map)
+    df = pd.read_csv(f'{input_path}/coord_swap/extract_missing.csv')
 
     for index, row in df.iterrows():
+        assert row['Name'] in test_df['Name'].to_list()
         test_row = test_df[test_df['Name'] == row['Name']]
-        assert row['Atom Name Number'] == int(test_row['Atom Name Number'].to_list()[0])
-        assert row['Element'] == test_row['Element'].to_list()[0]
-        assert row['Direction'] == test_row['Direction'].to_list()[0]
-        assert row['Swap'] == test_row['Swap'].to_list()[0]
-        assert row['File line'] == int(test_row['File line'].to_list()[0])
-        assert row['Final Type'] == test_row['Final Type'].to_list()[0]
-
-
-def test_R2D_D2R_miss():
-    nameA_list = ['S1', 'C2', 'N3', 'C4', 'C5', 'C6', 'C7', 'C9',
-                  'H1', 'H2', 'H3', 'H5', 'H6', 'H7', 'H11', 'H12', 'H13',
-                  'DC8', 'HV8', 'HV9', 'HV10']
-    nameB_list = ['S1', 'C2', 'N3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9',
-                  'H1', 'H2', 'H3', 'H6', 'H7', 'H8', 'H9', 'H10', 'H11', 'H12', 'H13',
-                  'DC10', 'HV4', 'HV14', 'HV15', 'HV16']
-
-    common_atoms_all = ['C6', 'H7', 'C4', 'S1', 'H6', 'H11', 'C7', 'H12', 'H2', 'H1',
-                        'C9', 'H3', 'C2', 'N3', 'H13', 'C5']
-    lineB_list = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
-
-    test_df = coordinate_swap._find_R2D_D2R_miss(nameB_list, nameA_list, common_atoms_all, lineB_list, 'B2A')
-    df = pd.read_csv(f'{input_path}/coord_swap/find_R2D_D2R_miss.csv')
-
-    for index, row in df.iterrows():
-        test_row = test_df[test_df['Name'] == row['Name']]
-        assert row['Atom Name Number'] == int(test_row['Atom Name Number'].to_list()[0])
-        assert row['Element'] == test_row['Element'].to_list()[0]
-        assert row['Direction'] == test_row['Direction'].to_list()[0]
-        assert row['Swap'] == test_row['Swap'].to_list()[0]
-        assert row['File line'] == int(test_row['File line'].to_list()[0])
+        assert row['Swap'] == test_row['Swap'].values[0]
 
 
 def test_fix_break():
@@ -171,13 +142,13 @@ def test_get_miss_coord():
     molA = coordinate_swap.fix_break(molA, nameA, A_dimensions, connection_map[connection_map['Resname'] == nameA])
     molB = coordinate_swap.fix_break(molB, nameB, B_dimensions, connection_map[connection_map['Resname'] == nameB])
 
-    df_no_coords = pd.read_csv(f'{input_path}/coord_swap/find_common.csv')
+    df_no_coords = pd.read_csv(f'{input_path}/coord_swap/extract_missing.csv')
     df = pd.read_csv(f'{input_path}/coord_swap/df_atom_swap.csv')
     df_no_nan = df.dropna()
 
-    df_test = coordinate_swap.get_miss_coord(molB, molA, nameB, nameA, df_no_coords, 'B2A',
+    df_test = coordinate_swap.get_miss_coord(molB, molA, nameB, nameA, df_no_coords, 'A2B',
                                              swap_map[(swap_map['Swap A'] == nameB) & (swap_map['Swap B'] == nameA)])
-    df_test = coordinate_swap.get_miss_coord(molA, molB, nameA, nameB, df_test, 'A2B',
+    df_test = coordinate_swap.get_miss_coord(molA, molB, nameA, nameB, df_test, 'B2A',
                                              swap_map[(swap_map['Swap A'] == nameA) & (swap_map['Swap B'] == nameB)])
 
     for index, row in df_no_nan.iterrows():
@@ -216,29 +187,23 @@ def test_print_preamble():
 def test_write_line():
     test_file = open('test_write_line.gro', 'w')
 
-    line_merged = '   36F2G    C1011574   3.917   6.393   5.463  0.2985 -0.1406  0.4882/n'
-    line = ['36F2G', 'C10', '11574', '3.917', '6.393', '5.463', '0.2985', '-0.1406', '0.4882/n']
     new_coord = [3.9165084, 6.3927655, 5.4633074]
     vel = ['0.000', '0.000', '0.000\n']
     atom_num = 11574
+    atom_name = 'C10'
 
-    coordinate_swap.write_line(test_file, line_merged, line, atom_num, vel, new_coord, 36, 'E2F')
+    coordinate_swap.write_line(test_file, atom_name, atom_num, vel, new_coord, 36, 'E2F')
 
-    line_merged = '  812SOL     OW12270   5.440   0.656   8.311  0.4628 -0.0392  0.2554/n'
-    line = ['812SOL', 'OW', '12270', '5.440', '0.656', '8.311', '0.4628', '-0.0392', '0.2554/n']
     new_coord = [5.4400544, 0.6561325, 8.3108530]
     atom_num = 12264
-    coordinate_swap.write_line(test_file, line_merged, line, atom_num, vel, new_coord)
-    line_merged = '   2.74964   2.74964   2.74964\n'
-    line = ['2.74964', '2.74964', '2.74964\n']
-    coordinate_swap.write_line(test_file, line_merged, line, atom_num, vel, new_coord)
+    atom_name = 'OW'
+    coordinate_swap.write_line(test_file, atom_name, atom_num, vel, new_coord, 812, 'SOL')
     test_file.close()
 
     reopen_test = open('test_write_line.gro', 'r').readlines()
 
     assert reopen_test[0] == '   36E2F    C1011574   3.9165084   6.3927655   5.4633074   0.000   0.000   0.000\n'
     assert reopen_test[1] == '  812SOL     OW12264   5.4400544   0.6561325   8.3108530   0.000   0.000   0.000\n'
-    assert reopen_test[2] == '   2.74964   2.74964   2.74964\n'
     os.remove('test_write_line.gro')
 
 
@@ -250,34 +215,6 @@ def test_identify_res():
         residue_options = swap_map['Swap A'].to_list() + swap_map['Swap B'].to_list()
         name = coordinate_swap.identify_res(mol.topology, residue_options)
         assert name == real_name
-
-
-def test_add_atom():
-    df = pd.read_csv(f'{input_path}/coord_swap/df_atom_swap.csv')
-    temp_file = open('test_add_atom.gro', 'w')
-
-    coordinate_swap._add_atom(temp_file, 1, 'D2E', df[(df['Name'] == 'H5') & (df['Swap'] == 'A2B')], ['0.000', '0.000', '0.000\n'], 12)  # noqa: E501
-    coordinate_swap._add_atom(temp_file, 1, 'E2F', df[(df['Name'] == 'DC10') & (df['Swap'] == 'B2A')], ['0.000', '0.000', '0.000\n'], 21)  # noqa: E501
-    temp_file.close()
-
-    read_temp_file = open('test_add_atom.gro', 'r').readlines()
-    assert read_temp_file[0] == '    1D2E     H5   12   0.0926050   1.6340195   0.3355029   0.000   0.000   0.000\n'
-    assert read_temp_file[1] == '    1E2F   DC10   21   2.6200285   1.4039259   2.7885396   0.000   0.000   0.000\n'
-    os.remove('test_add_atom.gro')
-
-
-def test_dummy_real_swap():
-    test_file = open('test_dummy_real_swap.gro', 'w')
-    df = pd.read_csv(f'{input_path}/coord_swap/df_atom_swap.csv')
-    orig_coords = np.zeros((22, 3))
-    orig_coords[17] = [2.5837841, 1.4738766, 2.5511920]
-
-    coordinate_swap._dummy_real_swap(test_file, 1, 'E2F', df[df['Name'] == 'DC8'], ['0.000', '0.000', '0.000\n'], 8, orig_coords, 'C8')  # noqa: E501
-    test_file.close()
-
-    reopen_test_file = open('test_dummy_real_swap.gro', 'r').readlines()
-    assert reopen_test_file[0] == '    1E2F     C8    8   2.5837841   1.4738766   2.5511920   0.000   0.000   0.000\n'
-    os.remove('test_dummy_real_swap.gro')
 
 
 def test_sep_merge():
@@ -312,33 +249,21 @@ def test_find_rotation_angle():
     test_angle = coordinate_swap._find_rotation_angle(initial_point, vertex, rotated_point, axis)
     assert np.isclose(angle, test_angle, 10**(-5))
 
-
-def test_add_or_swap():
-    test_file = open('test_add_or_swap.gro', 'w')
-    df = pd.read_csv(f'{input_path}/coord_swap/df_atom_swap.csv')
-    orig_coords = np.zeros((21, 3))
-    orig_coords[18] = [2.5970387, 1.5708300, 2.5017865]
-    skip_line = []
-
-    skip_line = coordinate_swap._add_or_swap(df[df['Name'] == 'HV4'], test_file, 1, 'E2F', ['0.000', '0.000', '0.000\n'], 22, orig_coords, skip_line, 'HV4')  # noqa: E501
-    skip_line = coordinate_swap._add_or_swap(df[df['Name'] == 'HV8'], test_file, 1, 'E2F', ['0.000', '0.000', '0.000\n'], 15, orig_coords, skip_line, 'H8')  # noqa: E501
-    test_file.close()
-
-    reopen_test_file = open('test_add_or_swap.gro', 'r').readlines()
-    assert reopen_test_file[0] == '    1E2F    HV4   22   2.3651702   1.4678032   2.8239074   0.000   0.000   0.000\n'
-    assert reopen_test_file[1] == '    1E2F     H8   15   2.5970387   1.5708300   2.5017865   0.000   0.000   0.000\n'
-    os.remove('test_add_or_swap.gro')
-
-    assert skip_line == [20]
+    initial_point = np.array([0, 1, 0])
+    rotated_point = np.array([0, 1, 0])
+    angle = 2*np.pi
+    test_angle = coordinate_swap._find_rotation_angle(initial_point, vertex, rotated_point, axis)
+    assert np.isclose(angle, test_angle, 10**(-5))
 
 
-def test_swap_name():
-    df_top = pd.read_csv(f'{input_path}/coord_swap/residue_connect.csv')
+def test_swap_name():  # Update needed
+    atom_name_mapping = pd.read_csv(f'{input_path}/coord_swap/atom_name_mapping.csv')
+    swap_name_match = atom_name_mapping[(atom_name_mapping['resname A'] == 'A2B') & (atom_name_mapping['resname B'] == 'B2C')]  # noqa: E501
 
     name_list = ['C2', 'C5', 'DC7', 'HV5']
     flip_name_list = ['C2', 'C5', 'C7', 'H5']
-    test_name_list = coordinate_swap._swap_name(name_list, 'B2C', df_top)
-    test_flip_name_list = coordinate_swap._swap_name(flip_name_list, 'A2B', df_top)
+    test_name_list = coordinate_swap._swap_name(name_list, 'B2C', swap_name_match)
+    test_flip_name_list = coordinate_swap._swap_name(flip_name_list, 'A2B', swap_name_match)
 
     assert test_name_list == flip_name_list
     assert test_flip_name_list == name_list
@@ -367,32 +292,60 @@ def test_get_names():
 def test_determine_connection():
     cmpr_df = pd.read_csv(f'{input_path}/coord_swap/residue_swap_map.csv')
     df_top = pd.read_csv(f'{input_path}/coord_swap/residue_connect.csv')
+    atom_name_mapping = pd.read_csv(f'{input_path}/coord_swap/atom_name_mapping.csv')
 
     A2B_names = ['S1', 'C2', 'N3', 'C4', 'C5', 'C6', 'H1', 'H2', 'H3', 'H4', 'H17', 'DC7', 'HV5', 'HV6', 'HV7']
     B2C_names = ['S1', 'C2', 'N3', 'C4', 'C5', 'C6', 'C7', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7', 'DC8', 'HV8', 'HV9', 'HV10']  # noqa: E501
     D2E_names = ['S1', 'C2', 'N3', 'C4', 'C5', 'C6', 'C7', 'C9', 'H1', 'H2', 'H3', 'H5', 'H6', 'H7', 'H11', 'H12', 'H13', 'DC8', 'HV8', 'HV9', 'HV10']  # noqa: E501
     E2F_names = ['S1', 'C2', 'N3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'H1', 'H2', 'H3', 'H6', 'H7', 'H8', 'H9', 'H10', 'H11', 'H12', 'H13', 'DC10', 'HV4', 'HV14', 'HV15', 'HV16']  # noqa: E501
 
-    A_only = [x for x in A2B_names if x not in B2C_names]
-    B_only = [x for x in B2C_names if x not in A2B_names]
-    test_df = coordinate_swap.determine_connection(A_only, B_only, 'A2B', 'B2C', df_top, 1)
+    # Determine shared atom names
+    swap_name_match = atom_name_mapping[(atom_name_mapping['resname A'] == 'A2B') & (atom_name_mapping['resname B'] == 'B2C')]  # noqa: E501
+    if len(swap_name_match[swap_name_match['resname A'] == 'A2B']) != 0:
+        common_atoms_A = list(swap_name_match['atom name A'].values)
+        common_atoms_B = list(swap_name_match['atom name B'].values)
+    else:
+        common_atoms_A = list(swap_name_match['atom name B'].values)
+        common_atoms_B = list(swap_name_match['atom name A'].values)
+    A_only = [x for x in A2B_names if x not in common_atoms_A]
+    test_df = coordinate_swap.determine_connection(A_only, swap_name_match, 'A2B', 'B2C', df_top, 1)
     select_cmpr_df = cmpr_df[(cmpr_df['Swap A'] == 'A2B') & (cmpr_df['Swap B'] == 'B2C')]
     for col in ['Anchor Atom Name A', 'Anchor Atom Name B', 'Alignment Atom A', 'Alignment Atom B', 'Angle Atom A', 'Angle Atom B', 'Missing Atom Name']:  # noqa: E501
         assert test_df[col].to_list()[0] == select_cmpr_df[col].to_list()[0]
 
-    test_df = coordinate_swap.determine_connection(B_only, A_only, 'B2C', 'A2B', df_top, 0)
+    B_only = [x for x in B2C_names if x not in common_atoms_B]
+    test_df = coordinate_swap.determine_connection(B_only, swap_name_match, 'B2C', 'A2B', df_top, 0)
     select_cmpr_df = cmpr_df[(cmpr_df['Swap B'] == 'A2B') & (cmpr_df['Swap A'] == 'B2C')]
     for col in ['Anchor Atom Name A', 'Anchor Atom Name B', 'Alignment Atom A', 'Alignment Atom B', 'Angle Atom A', 'Angle Atom B', 'Missing Atom Name']:  # noqa: E501
         assert test_df[col].to_list()[0] == select_cmpr_df[col].to_list()[0]
 
-    A_only = [x for x in D2E_names if x not in E2F_names]
-    B_only = [x for x in E2F_names if x not in D2E_names]
-    test_df = coordinate_swap.determine_connection(A_only, B_only, 'D2E', 'E2F', df_top, 1)
+    swap_name_match = atom_name_mapping[(atom_name_mapping['resname A'] == 'D2E') & (atom_name_mapping['resname B'] == 'E2F')]  # noqa: E501
+    if len(swap_name_match[swap_name_match['resname A'] == 'D2E']) != 0:
+        common_atoms_A = list(swap_name_match['atom name A'].values)
+        common_atoms_B = list(swap_name_match['atom name B'].values)
+    else:
+        common_atoms_A = list(swap_name_match['atom name B'].values)
+        common_atoms_B = list(swap_name_match['atom name A'].values)
+    A_only = [x for x in D2E_names if x not in common_atoms_A]
+    B_only = [x for x in E2F_names if x not in common_atoms_B]
+    test_df = coordinate_swap.determine_connection(A_only, swap_name_match, 'D2E', 'E2F', df_top, 1)
     select_cmpr_df = cmpr_df[(cmpr_df['Swap A'] == 'D2E') & (cmpr_df['Swap B'] == 'E2F')]
     for col in ['Anchor Atom Name A', 'Anchor Atom Name B', 'Alignment Atom A', 'Alignment Atom B', 'Angle Atom A', 'Angle Atom B', 'Missing Atom Name']:  # noqa: E501
         assert test_df[col].to_list()[0] == select_cmpr_df[col].to_list()[0]
 
-    test_df = coordinate_swap.determine_connection(B_only, A_only, 'E2F', 'D2E', df_top, 0)
+    test_df = coordinate_swap.determine_connection(B_only, swap_name_match, 'E2F', 'D2E', df_top, 0)
     select_cmpr_df = cmpr_df[(cmpr_df['Swap A'] == 'E2F') & (cmpr_df['Swap B'] == 'D2E')]
     for col in ['Anchor Atom Name A', 'Anchor Atom Name B', 'Alignment Atom A', 'Alignment Atom B', 'Angle Atom A', 'Angle Atom B', 'Missing Atom Name']:  # noqa: E501
         assert test_df[col].to_list()[0] == select_cmpr_df[col].to_list()[0]
+
+
+def test_create_atom_map():
+    gro = [f'{input_path}/coord_swap/A-B.gro', f'{input_path}/coord_swap/B-C.gro', f'{input_path}/coord_swap/C-D.gro', f'{input_path}/coord_swap/D-E.gro', f'{input_path}/coord_swap/E-F.gro']  # noqa: E501
+    names = ['A2B', 'B2C', 'C2D', 'D2E', 'E2F']
+    swap_pattern = [[[0, 1], [1, 0]], [[1, 1], [2, 0]], [[2, 1], [3, 0]], [[3, 1], [4, 0]]]
+
+    atom_name_mapping_true = pd.read_csv(f'{input_path}/coord_swap/atom_name_mapping.csv')
+    coordinate_swap.create_atom_map(gro, names, swap_pattern)
+    atom_name_mapping_test = pd.read_csv('atom_name_mapping.csv')
+    assert (atom_name_mapping_true == atom_name_mapping_test).all
+    os.remove('atom_name_mapping.csv')
