@@ -742,6 +742,10 @@ def write_modified(df_atom_swap, swap, line_start, orig_file, new_file, atom_num
             write_line(new_file, atom, atom_num, vel, [x, y, z], resnum, new_res_name)
         atom_num += 1
 
+        # GRO files atom number has a limit of 5 digits so restart when we get to 6
+        if atom_num == 100000:
+            atom_num = 1
+
     for i in range(line_start, len(orig_file)-1):
         # Process input lines
         line, prev_line = _process_line(orig_file, i)
