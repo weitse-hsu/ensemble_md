@@ -272,11 +272,22 @@ def _calculate_df(estimators):
     --------
     :func:`calculate_free_energy`
     """
-    l = np.linspace(0, 1, num=len(estimators[0].index))
-    estimators[0].index = l
-    estimators[0].columns = l
-    est = estimators[0].loc[0, 1]
-    return est
+    # Compute FE estimate
+    df = estimators[0].delta_f_
+    l = np.linspace(0, 1, num=len(df.index))
+    df.index = l
+    df.columns = l
+    est = df.loc[0, 1]
+    print(df)
+
+    # Compute FE extimate error
+    df_err = estimators[0].d_delta_f_
+    l = np.linspace(0, 1, num=len(df_err.index))
+    df_err.index = l
+    df_err.columns = l
+    err = df_err.loc[0, 1]
+
+    return est, err
 
 
 def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="propagate", n_bootstrap=None, seed=None, MTREXEE=False):  # noqa: E501
@@ -373,11 +384,15 @@ def calculate_free_energy(data, state_ranges, df_method="MBAR", err_method="prop
         pass
     else:
         raise ParameterError('Specified err_method not available.')
-
-    df.insert(0, 0)
-    df_err.insert(0, 0)
-    f = [sum(df[:(i + 1)]) for i in range(len(df))]
-    f_err = [np.sqrt(sum([x**2 for x in df_err[:(i+1)]])) for i in range(len(df_err))]
+    
+    if MTREXEE is False:
+        df.insert(0, 0)
+        df_err.insert(0, 0)
+        f = [sum(df[:(i + 1)]) for i in range(len(df))]
+        f_err = [np.sqrt(sum([x**2 for x in df_err[:(i+1)]])) for i in range(len(df_err))]
+    else:
+        f = df
+        f_err = df_err
 
     return f, f_err, estimators
 
