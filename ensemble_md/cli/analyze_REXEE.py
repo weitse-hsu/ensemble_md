@@ -26,6 +26,7 @@ import natsort
 import argparse
 import warnings
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import rc
 from datetime import datetime
@@ -244,8 +245,7 @@ def main():
             if len({len(i) for i in pi_list}) == 1:  # all lists in pi_list have the same length
                 print(f'   - Average of the above: {", ".join([f"{i:.3f}" for i in np.mean(pi_list, axis=0).reshape(-1)])}')  # noqa: E501
 
-    # 2-10. Calculate the state index correlation time for each trajectory (this step is more time-consuming one)
-    if REXEE.modify_coords is None:  # Causes issues for non-continuous MT-REXEE trajectories
+        # 2-10. Calculate the state index correlation time for each trajectory (this step is more time-consuming one)
         print('\n2-10. Calculating the state index correlation time ...')
         tau_list = [(pymbar.timeseries.statistical_inefficiency(state_trajs[i], fast=True) - 1) / 2 * dt_traj for i in range(REXEE.n_sim)]  # noqa: E501
         for i in range(REXEE.n_sim):
@@ -463,6 +463,7 @@ def main():
 
         else:  # MT-REXEE means each simulation is a seperate transformation
             fe_est, fe_err, trans = [], [], []
+            fe_est, fe_err, trans = [], [], []
             for sim in range(REXEE.n_sim):
                 print(f'Computing Free Energy for Simulation {sim}')
                 # 4-1. Subsampling the data
@@ -537,6 +538,7 @@ def main():
                                 time_str = f'{time_value:.4f}'
                                 n = len(line.split(' ')[0])
                                 new_line = time_str + line[n:]
+                                new_line = time_str + line[n:]
                                 output_file.write(new_line)
             output_file.close()
 
@@ -545,4 +547,5 @@ def main():
     print(f'\nTotal wall time GROMACS spent to finish all iterations: {utils.format_time(t_wall_tot)}')
     print(f'Total time spent in syncrhonizing all replicas: {utils.format_time(t_sync)}')
 
+    print(f'\nTime spent on data analysis: {utils.format_time(time.time() - t0)}')
     print(f'\nTime spent on data analysis: {utils.format_time(time.time() - t0)}')
