@@ -7,6 +7,14 @@
 #    Copyright (c) 2022 University of Colorado Boulder             #
 #                                                                  #
 ####################################################################
+from ensemble_md.utils import utils  # noqa: E402
+from ensemble_md.utils import gmx_parser  # noqa: E402
+from ensemble_md.analysis import analyze_traj  # noqa: E402
+from ensemble_md.analysis import analyze_matrix  # noqa: E402
+from ensemble_md.analysis import msm_analysis  # noqa: E402
+from ensemble_md.analysis import analyze_free_energy  # noqa: E402
+from ensemble_md.replica_exchange_EE import ReplicaExchangeEE  # noqa: E402
+from ensemble_md.utils.exceptions import ParameterError  # noqa: E402
 import os
 import sys
 import time
@@ -22,16 +30,8 @@ import matplotlib.pyplot as plt
 from matplotlib import rc
 from datetime import datetime
 from deeptime.markov.tools.analysis import is_transition_matrix
-warnings.simplefilter(action='ignore', category=UserWarning)
 import pandas as pd
-from ensemble_md.utils import utils  # noqa: E402
-from ensemble_md.utils import gmx_parser  # noqa: E402
-from ensemble_md.analysis import analyze_traj  # noqa: E402
-from ensemble_md.analysis import analyze_matrix  # noqa: E402
-from ensemble_md.analysis import msm_analysis  # noqa: E402
-from ensemble_md.analysis import analyze_free_energy  # noqa: E402
-from ensemble_md.replica_exchange_EE import ReplicaExchangeEE  # noqa: E402
-from ensemble_md.utils.exceptions import ParameterError  # noqa: E402
+warnings.simplefilter(action='ignore', category=UserWarning)
 
 
 def initialize(args):
@@ -84,7 +84,7 @@ def initialize(args):
 
 
 def main():
-    #t0 = time.time()
+    t0 = time.time()
     args = initialize(sys.argv[1:])
     warnings.simplefilter(action='ignore', category=RuntimeWarning)
     sys.stdout = utils.Logger(logfile=args.output)
@@ -143,10 +143,10 @@ def main():
     analyze_matrix.plot_matrix(reps_mtx, f'{args.dir}/rep_transmtx_allconfigs.png')
 
     # 1-3. Calculate the spectral gap for the replica-space transition amtrix
-#    print('1-3. Calculating the spectral gap of the replica-space transition matrix ...')
-#    spectral_gap, spectral_gap_err, eig_vals = analyze_matrix.calc_spectral_gap(reps_mtx)
-#    print(f'The spectral gap of the replica-space transition matrix: {spectral_gap:.3f}')
-
+    if REXEE.modify_coords is None:  # Causes issues for non-continuous MT-REXEE trajectories
+        print('1-3. Calculating the spectral gap of the replica-space transition matrix ...')
+        spectral_gap, spectral_gap_err, eig_vals = analyze_matrix.calc_spectral_gap(reps_mtx)
+        print(f'The spectral gap of the replica-space transition matrix: {spectral_gap:.3f}')
 
     # Section 2. Analysis based on transitions between states
     print('\n[ Section 2. Analysis based on transitions between states ]')
@@ -233,22 +233,24 @@ def main():
         print(f'   - Average of the above: {np.mean(spectral_gaps):.3f} (std: {np.std(spectral_gaps, ddof=1):.3f})')
 
     # 2-9. For each trajectory, calculate the stationary distribution from the overall transition matrix obtained in step 2-2.  # noqa: E501
-    print('\n2-9. Calculating the stationary distributions ...')
-    #pi_list = [analyze_matrix.calc_equil_prob(mtx) for mtx in mtx_list]
-    #if any([x is None for x in pi_list]):
-    #    pass  # None is in the list
-    #else:
-    #    for i in range(REXEE.n_sim):
-    #        print(f'   - Trajectory {i}: {", ".join([f"{j:.3f}" for j in pi_list[i].reshape(-1)])}')
-    #    if len({len(i) for i in pi_list}) == 1:  # all lists in pi_list have the same length
-    #        print(f'   - Average of the above: {", ".join([f"{i:.3f}" for i in np.mean(pi_list, axis=0).reshape(-1)])}')  # noqa: E501
+    if REXEE.modify_coords is None:  # Causes issues for non-continuous MT-REXEE trajectories
+        print('\n2-9. Calculating the stationary distributions ...')
+        pi_list = [analyze_matrix.calc_equil_prob(mtx) for mtx in mtx_list]
+        if any([x is None for x in pi_list]):
+            pass  # None is in the list
+        else:
+            for i in range(REXEE.n_sim):
+                print(f'   - Trajectory {i}: {", ".join([f"{j:.3f}" for j in pi_list[i].reshape(-1)])}')
+            if len({len(i) for i in pi_list}) == 1:  # all lists in pi_list have the same length
+                print(f'   - Average of the above: {", ".join([f"{i:.3f}" for i in np.mean(pi_list, axis=0).reshape(-1)])}')  # noqa: E501
 
     # 2-10. Calculate the state index correlation time for each trajectory (this step is more time-consuming one)
-    #print('\n2-10. Calculating the state index correlation time ...')
-    #tau_list = [(pymbar.timeseries.statistical_inefficiency(state_trajs[i], fast=True) - 1) / 2 * dt_traj for i in range(REXEE.n_sim)]  # noqa: E501
-    #for i in range(REXEE.n_sim):
-    #    print(f'   - Trajectory {i}: {tau_list[i]:.1f} ps')
-    #print(f'   - Average of the above: {np.mean(tau_list):.1f} ps (std: {np.std(tau_list, ddof=1):.1f} ps)')
+    if REXEE.modify_coords is None:  # Causes issues for non-continuous MT-REXEE trajectories
+        print('\n2-10. Calculating the state index correlation time ...')
+        tau_list = [(pymbar.timeseries.statistical_inefficiency(state_trajs[i], fast=True) - 1) / 2 * dt_traj for i in range(REXEE.n_sim)]  # noqa: E501
+        for i in range(REXEE.n_sim):
+            print(f'   - Trajectory {i}: {tau_list[i]:.1f} ps')
+        print(f'   - Average of the above: {np.mean(tau_list):.1f} ps (std: {np.std(tau_list, ddof=1):.1f} ps)')
 
     # 2-11. Calculate transit times for each trajectory
     print('\n2-11. Plotting the average transit times ...')
@@ -460,7 +462,7 @@ def main():
                         print(f'RMSE of the free energy profile for alchemical range {i} (states {REXEE.state_ranges[i][0]} to {REXEE.state_ranges[i][-1]}): {rmse_list[i]:.2f} kT')  # noqa: E501
 
         else:  # MT-REXEE means each simulation is a seperate transformation
-            fe_est, fe_err, trans = [],[],[]
+            fe_est, fe_err, trans = [], [], []
             for sim in range(REXEE.n_sim):
                 print(f'Computing Free Energy for Simulation {sim}')
                 # 4-1. Subsampling the data
@@ -502,11 +504,11 @@ def main():
         section_idx += 1
         print(f'\n[ Section {section_idx}. Create end-state trajecotries for each simulation')
 
-        #l0, l1, ps_per_frame = gmx_parser.get_end_states(f'{REXEE.working_dir}/sim_0/iteration_0/expanded.mdp')
+        l0, l1, ps_per_frame = gmx_parser.get_end_states(f'{REXEE.working_dir}/sim_0/iteration_0/expanded.mdp')
         n_sim, n_iter = np.shape(rep_trajs)
-        #if REXEE.swap_rep_pattern is None:
-        #    raise Exception('MT-REXEE trajectory analysis requires swap_rep_pattern to be defined')
-        #analyze_traj.end_states_only_traj(REXEE.working_dir, n_sim, n_iter, l0, l1, REXEE.swap_rep_pattern, ps_per_frame)  # noqa: E501
+        if REXEE.swap_rep_pattern is None:
+            raise Exception('MT-REXEE trajectory analysis requires swap_rep_pattern to be defined')
+        analyze_traj.end_states_only_traj(REXEE.working_dir, n_sim, n_iter, l0, l1, REXEE.swap_rep_pattern, ps_per_frame)  # noqa: E501
 
         # Section 5.2. Create concatenated trajectories for each individual simulation
         print('5.2. Create concatenated trajectories for each individual simulation')
@@ -522,8 +524,8 @@ def main():
                 if i == 0:
                     for line in input_file:
                         output_file.write(line)
-                    time = float(input_file[-1].split(' ')[0])
-                    time_step = np.round(time - float(input_file[-2].split(' ')[0]), 4)
+                    time_value = float(input_file[-1].split(' ')[0])
+                    time_step = np.round(time_value - float(input_file[-2].split(' ')[0]), 4)
                 else:
                     skipped_first = False
                     for line in input_file:
@@ -531,10 +533,10 @@ def main():
                             if skipped_first is False:
                                 skipped_first = True
                             else:
-                                time += time_step
-                                time_str = f'{time:.4f}'
+                                time_value += time_step
+                                time_str = f'{time_value:.4f}'
                                 n = len(line.split(' ')[0])
-                                new_line = time_str + line[n:] 
+                                new_line = time_str + line[n:]
                                 output_file.write(new_line)
             output_file.close()
 
@@ -543,4 +545,4 @@ def main():
     print(f'\nTotal wall time GROMACS spent to finish all iterations: {utils.format_time(t_wall_tot)}')
     print(f'Total time spent in syncrhonizing all replicas: {utils.format_time(t_sync)}')
 
-    #print(f'\nTime spent on data analysis: {utils.format_time(time.time() - t0)}')
+    print(f'\nTime spent on data analysis: {utils.format_time(time.time() - t0)}')

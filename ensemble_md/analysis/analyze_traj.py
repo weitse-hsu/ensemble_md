@@ -186,8 +186,6 @@ def stitch_time_series_for_sim(files, shifts=None, dhdl=True, col_idx=-1, save_n
     :func:`.stitch_time_series`
     :func:`.stitch_xtc_trajs`
     """
-    #if os.path.exists('track_swap_frame.npy'):
-
     n_sim = len(files)      # number of replicas
     n_iter = len(files[0])  # number of iterations per replica
     trajs = [[] for i in range(n_sim)]
@@ -1483,7 +1481,7 @@ def concat_sim_traj(working_dir, n_sim, n_iter, gro):
     import mdtraj as md
     import os
     from tqdm import tqdm
-    
+
     for rep in range(n_sim):
         if not os.path.exists(f'{working_dir}/analysis/sim{rep}_concat.xtc'):
             if os.path.exists(f'{working_dir}/sim_{rep}/iteration_0/confout_backup.gro'):
