@@ -160,6 +160,8 @@ class ReplicaExchangeEE:
         optional_args = {
             "add_swappables": None,
             "modify_coords": None,
+            "resname_select": None,
+            "resname_transform": None,
             "resname_list": None,
             "swap_rep_pattern": None,
             "nst_sim": None,
@@ -456,6 +458,16 @@ class ReplicaExchangeEE:
                 if self.resname_list is None and (not os.path.exists('residue_connect.csv') or not os.path.exists('residue_swap_map.csv')):  # noqa: E501
                     raise ParameterError('resname_list option must be filled in if using default swapping function and not swap guide')  # noqa: E501
                 self.modify_coords_fn = self.default_coords_fn
+            elif self.modify_coords == 'number':
+                if self.resname_select is None or self.resname_transform is None:
+                    raise ParameterError('resname_select and resname_transform options must be filled in if using the change number function')  # noqa: E501
+                # Read file
+                input_file = gmx_parser.read_top(self.top[-1], self.resname_transform)
+                # Determine the atom names corresponding to the atom numbers
+                start_line, atom_name, atom_num, state = coordinate_swap.get_names(input_file, self.resname_transform)
+                # Save atom names for residue of interest and set the coordinate swap function
+                self.atom_names = atom_name
+                self.modify_coords_fn = self.change_num
             else:
                 module_file = os.path.basename(self.modify_coords)
                 module_dir = os.path.dirname(self.modify_coords)
@@ -1651,8 +1663,8 @@ class ReplicaExchangeEE:
         if len(molA.topology.select('water')) != 0:
             A_dimensions = coordinate_swap.get_dimensions(molA_file)
             B_dimensions = coordinate_swap.get_dimensions(molB_file)
-            molA = coordinate_swap.fix_break(molA, nameA, A_dimensions, connection_map[connection_map['Resname'] == nameA])  # noqa: E501
-            molB = coordinate_swap.fix_break(molB, nameB, B_dimensions, connection_map[connection_map['Resname'] == nameB])  # noqa: E501
+            molA = coordinate_swap.fix_break(molA, nameA, A_dimensions, connection_map[connection_map['Resname'] == nameA], self.verbose)  # noqa: E501
+            molB = coordinate_swap.fix_break(molB, nameB, B_dimensions, connection_map[connection_map['Resname'] == nameB], self.verbose)  # noqa: E501
 
         # Step 4: Determine coordinates of atoms which need to be reconstructed as we swap coordinates between molecules  # noqa: E501
         df_atom_swap = coordinate_swap.get_miss_coord(molB, molA, nameB, nameA, df_atom_swap, 'A2B', swap_map[(swap_map['Swap A'] == nameB) & (swap_map['Swap B'] == nameA)])  # noqa: E501
@@ -1670,11 +1682,11 @@ class ReplicaExchangeEE:
         line_restart, atom_num_restart = coordinate_swap.write_unmodified(line_start, molA_file, molB_new, nameA, 1, line_start, copy.deepcopy(molA.xyz[0]))  # noqa: E501
 
         # Print new coordinates to file for molB
-        line_restart, atom_num_restart = coordinate_swap.write_modified(df_atom_swap, 'A2B', line_start, molA_file, molB_new, atom_num_restart, nameA, nameB, copy.deepcopy(molA.xyz[0]), atom_mapping, atom_order_B, atom_order_A)  # noqa: E501
+        line_restart, atom_num_restart = coordinate_swap.write_modified(df_atom_swap, 'A2B', line_restart, molA_file, molB_new, atom_num_restart, nameA, nameB, copy.deepcopy(molA.xyz[0]), atom_mapping, atom_order_B, atom_order_A)  # noqa: E501
 
         if line_restart is not None:
             # Print rest of file after modified residue
-            coordinate_swap.write_unmodified(line_restart, molA_file, molB_new, nameA, atom_num_restart, line_start, copy.deepcopy(molA.xyz[0]))  # noqa: E501
+            line_start, atom_num_restart = coordinate_swap.write_unmodified(line_restart, molA_file, molB_new, nameA, atom_num_restart, line_start, copy.deepcopy(molA.xyz[0]))  # noqa: E501
 
         # Print box size
         molB_new.write(molA_file[-1])
@@ -1688,11 +1700,11 @@ class ReplicaExchangeEE:
         line_restart, atom_num_restart = coordinate_swap.write_unmodified(line_start, molB_file, molA_new, nameB, 1, line_start, copy.deepcopy(molB.xyz[0]))  # noqa: E501
 
         # Print new coordinates to file for molA
-        line_restart, atom_num_restart = coordinate_swap.write_modified(df_atom_swap, 'B2A', line_start, molB_file, molA_new, atom_num_restart, nameB, nameA, copy.deepcopy(molB.xyz[0]), atom_mapping, atom_order_A, atom_order_B)  # noqa: E501
+        line_restart, atom_num_restart = coordinate_swap.write_modified(df_atom_swap, 'B2A', line_restart, molB_file, molA_new, atom_num_restart, nameB, nameA, copy.deepcopy(molB.xyz[0]), atom_mapping, atom_order_A, atom_order_B)  # noqa: E501
 
         if line_restart is not None:
             # Print rest of file after modified residue
-            coordinate_swap.write_unmodified(line_restart, molB_file, molA_new, nameB, atom_num_restart, line_start, copy.deepcopy(molB.xyz[0]))  # noqa: E501
+            line_start, atom_num_restart = coordinate_swap.write_unmodified(line_restart, molB_file, molA_new, nameB, atom_num_restart, line_start, copy.deepcopy(molB.xyz[0]))  # noqa: E501
 
         # Print box size
         molA_new.write(molB_file[-1])
@@ -1707,13 +1719,13 @@ class ReplicaExchangeEE:
         Processes the input topologies in order to determine the atoms for alignment in the default GRO swapping
         function. Output as csv files to prevent needing to re-run this step.
         """
-        if not os.path.exists('atom_name_mapping.csv'):
+        if not os.path.exists('atom_name_mapping.csv') and self.resname_list is not None:
             coordinate_swap.create_atom_map(self.gro, self.resname_list, self.swap_rep_pattern)
             atom_name_mapping = pd.read_csv('atom_name_mapping.csv')
-        else:
+        elif self.resname_list is not None:
             atom_name_mapping = pd.read_csv('atom_name_mapping.csv')
 
-        if not os.path.exists('residue_connect.csv'):
+        if not os.path.exists('residue_connect.csv') and self.resname_list is not None:
             df_top = pd.DataFrame()
             for f, file_name in enumerate(self.top):
                 # Read file
@@ -1743,10 +1755,38 @@ class ReplicaExchangeEE:
                 df = pd.DataFrame({'Resname': self.resname_list[f], 'Connect 1': connect_1, 'Connect 2': connect_2, 'State 1': state_1, 'State 2': state_2})  # noqa: E501
                 df_top = pd.concat([df_top, df])
             df_top.to_csv('residue_connect.csv')
+        elif not os.path.exists('residue_connect.csv'):
+            df_top = pd.DataFrame()
+            for resname in [self.resname_select, self.resname_transform]:
+                # Read file
+                input_file = gmx_parser.read_top(self.top[0], resname)
+
+                # Determine the atom names corresponding to the atom numbers
+                start_line, atom_name, atom_num, state = coordinate_swap.get_names(input_file, resname)
+
+                # Determine the connectivity of all atoms
+                connect_1, connect_2 = [], []  # Atom 1 and atom 2 which are connected and which state they are dummy atoms  # noqa: E501
+                for l, line in enumerate(input_file[start_line:]):  # noqa: E741
+                    line_sep = line.split(' ')
+                    if line_sep[0] == ';':
+                        continue
+                    if line_sep[0] == '\n':
+                        break
+                    while '' in line_sep:
+                        line_sep.remove('')
+                    if int(line_sep[0]) in atom_num and int(line_sep[1]) in atom_num:
+                        num_1 = np.where(atom_num == int(line_sep[0]))[0][0]
+                        num_2 = np.where(atom_num == int(line_sep[1]))[0][0]
+                        connect_1.append(atom_name[num_1])
+                        connect_2.append(atom_name[num_2])
+
+                df = pd.DataFrame({'Resname': resname, 'Connect 1': connect_1, 'Connect 2': connect_2})  # noqa: E501
+                df_top = pd.concat([df_top, df])
+            df_top.to_csv('residue_connect.csv')
         else:
             df_top = pd.read_csv('residue_connect.csv')
 
-        if not os.path.exists('residue_swap_map.csv'):
+        if not os.path.exists('residue_swap_map.csv') and self.resname_list is not None:
             df_map = pd.DataFrame()
             for swap in self.swap_rep_pattern:
                 # Determine atoms not present in both molecules
@@ -1773,3 +1813,148 @@ class ReplicaExchangeEE:
                     df_map = pd.concat([df_map, df])
 
             df_map.to_csv('residue_swap_map.csv')
+
+    def change_num(self, molA_file_name, molB_file_name, swap_index):
+        """
+        Swaps coordinates between two GRO files which differ in the number of the molecule of interest
+
+        Parameters
+        ----------
+        molA_file_name : str
+            GRO file name for the moleucle to be swapped.
+        molB_file_name : str
+            GRO file name for the other moleucle to be swapped.
+        """
+        # Determine name for transformed residue
+        molA_dir = molA_file_name.rsplit('/', 1)[0] + '/'
+        molB_dir = molB_file_name.rsplit('/', 1)[0] + '/'
+
+        # Load trajectory trr for higher precison coordinates
+        molA = md.load_trr(f'{molA_dir}/traj.trr', top=molA_file_name).slice(swap_index[0])  # Load specified frame of trr trajectory  # noqa: E501
+        molB = md.load_trr(f'{molB_dir}/traj.trr', top=molB_file_name).slice(swap_index[1])
+        molA_coords = copy.deepcopy(molA.xyz[0])
+        molB_coords = copy.deepcopy(molB.xyz[0])
+        connection_map = pd.read_csv('residue_connect.csv')
+
+        # Step 1: Read the GRO input coordinate files and open temporary Output files
+        molA_file = open(molA_file_name, 'r').readlines()  # open input file
+        molB_new_file_name = 'B_hybrid_swap.gro'
+        molB_new = open(molB_new_file_name, 'w')
+        molB_file = open(molB_file_name, 'r').readlines()  # open input file
+        molA_new_file_name = 'A_hybrid_swap.gro'
+        molA_new = open(molA_new_file_name, 'w')
+
+        # Step 2: Determine how many of the molecule of interest are present in each system
+        numA, listA, trans_listA = coordinate_swap.deter_num_molecule(molA_file_name, self.resname_select, self.resname_transform)  # noqa: E501
+        numB, listB, trans_listB = coordinate_swap.deter_num_molecule(molB_file_name, self.resname_select, self.resname_transform)  # noqa: E501
+
+        # Step 3: Fix break if present for solvated systems only
+        if len(molA.topology.select('water')) != 0:
+            A_dimensions = coordinate_swap.get_dimensions(molA_file)
+            B_dimensions = coordinate_swap.get_dimensions(molB_file)
+            for resid in listA:
+                molA = coordinate_swap.fix_break(molA, self.resname_select, A_dimensions, connection_map[connection_map['Resname'] == self.resname_select], self.verbose, resid)  # noqa: E501
+            for resid in trans_listA:
+                molA = coordinate_swap.fix_break(molA, self.resname_transform, A_dimensions, connection_map[connection_map['Resname'] == self.resname_transform], self.verbose, resid)  # noqa: E501
+            for resid in listB:
+                molB = coordinate_swap.fix_break(molB, self.resname_select, B_dimensions, connection_map[connection_map['Resname'] == self.resname_select], self.verbose, resid)  # noqa: E501
+            for resid in trans_listB:
+                molB = coordinate_swap.fix_break(molB, self.resname_transform, B_dimensions, connection_map[connection_map['Resname'] == self.resname_transform], self.verbose, resid)  # noqa: E501
+
+        # Step 3: Setup the coordinate DF for the molecules
+        name, resid, resname, swap = [], [], [], []
+        for i in listA:
+            for n in self.atom_names:
+                name.append(n)
+                resid.append(i)
+                resname.append(self.resname_select)
+                swap.append('B2A')
+        for i in trans_listA:
+            for n in self.atom_names:
+                name.append(n)
+                resid.append(i)
+                resname.append(self.resname_transform)
+                swap.append('B2A')
+        for i in listB:
+            for n in self.atom_names:
+                name.append(n)
+                resid.append(i)
+                resname.append(self.resname_select)
+                swap.append('A2B')
+        for i in trans_listB:
+            for n in self.atom_names:
+                name.append(n)
+                resid.append(i)
+                resname.append(self.resname_transform)
+                swap.append('A2B')
+        df_atom_swap = pd.DataFrame({'Name': name, 'Resid': resid, 'Resname': resname, 'Swap': swap})
+
+        # Step 4: Determine coordinates of all residues of interest  # noqa: E501
+        df_atom_swap = coordinate_swap.get_miss_coord_by_num(molB, molA, self.resname_select, self.resname_transform, 'A2B', np.array(listB+trans_listB), listA, trans_listA, self.atom_names, df_atom_swap)  # noqa: E501
+        df_atom_swap = coordinate_swap.get_miss_coord_by_num(molA, molB, self.resname_select, self.resname_transform, 'B2A', np.array(listA+trans_listA), listB, trans_listB, self.atom_names, df_atom_swap)  # noqa: E501
+        df_atom_swap.to_csv('df_atom_swap.csv')
+
+        # Step 5: Parse Current file to ensure atoms are added in the correct order
+        resname_opt = [self.resname_select, self.resname_transform]
+        if len(listA) == 0:
+            id_A = [[], trans_listA[0]]
+        else:
+            id_A = [listA[0], trans_listA[0]]
+        if len(listB) == 0:
+            id_B = [[], trans_listB[0]]
+        else:
+            id_B = [listB[0], trans_listB[0]]
+        atom_order_A = gmx_parser.deter_atom_order(molA_file, resname_opt, id_A)
+        atom_order_B = gmx_parser.deter_atom_order(molB_file, resname_opt, id_B)
+
+        # Step 6: Write the new file
+        # Reprint preamble text
+        preamble_legth = coordinate_swap.print_preamble(molA_file, molB_new, numB*len(self.atom_names), numA*len(self.atom_names))  # noqa: E501
+        line_start = preamble_legth
+
+        atom_num_restart = 1
+        resnum_restart = None
+        while line_start < len(molA_file):
+            if line_start is not None:
+                # Print up until we reach the residue to modify
+                line_start, atom_num_restart = coordinate_swap.write_unmodified(line_start, molA_file, molB_new, resname_opt, atom_num_restart, preamble_legth, molA_coords, resnum_restart)  # noqa: E501
+            else:
+                break
+
+            if line_start is not np.nan:
+                # Print new coordinates to file for molB
+                line_start, resnum_restart, atom_num_restart = coordinate_swap.write_modified_res(df_atom_swap, 'A2B', line_start, molA_file, molB_new, atom_num_restart, atom_order_B, resname_opt)  # noqa: E501
+            else:
+                break
+
+        # Print box size
+        molB_new.write(molA_file[-1])
+        molB_new.close()
+
+        # Step 7: Write the other new file
+        # Reprint preamble text
+        preamble_legth = coordinate_swap.print_preamble(molB_file, molA_new, numA*len(self.atom_names), numB*len(self.atom_names))  # noqa: E501
+        line_start = preamble_legth
+
+        atom_num_restart = 1
+        resnum_restart = None
+        while line_start < len(molB_file):
+            if line_start is not None:
+                # Print up until we reach the residue to modify
+                line_start, atom_num_restart = coordinate_swap.write_unmodified(line_start, molB_file, molA_new, resname_opt, atom_num_restart, preamble_legth, molB_coords, resnum_restart)  # noqa: E501
+            else:
+                break
+
+            if line_start is not np.nan:
+                # Print new coordinates to file for molB
+                line_start, resnum_restart, atom_num_restart = coordinate_swap.write_modified_res(df_atom_swap, 'B2A', line_start, molB_file, molA_new, atom_num_restart, atom_order_A, resname_opt)  # noqa: E501
+            else:
+                break
+
+        # Print box size
+        molA_new.write(molB_file[-1])
+        molA_new.close()
+
+        # Rename temp files
+        os.rename('A_hybrid_swap.gro', molB_dir + '/confout.gro')
+        os.rename('B_hybrid_swap.gro', molA_dir + '/confout.gro')

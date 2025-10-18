@@ -107,6 +107,8 @@ def main():
                 MDP.write(f"{REXEE.working_dir}/sim_{i}/iteration_0/{REXEE.mdp}", skipempty=True)
             if REXEE.modify_coords == 'default' and (not os.path.exists('residue_connect.csv') or not os.path.exists('residue_swap_map.csv')):  # noqa: E501
                 REXEE.process_top()
+            elif REXEE.modify_coords == 'number' and not os.path.exists('residue_connect.csv'):  # noqa: E501
+                REXEE.process_top()
 
         # 2-2. Run the first set of simulations
         REXEE.run_REXEE(0)
