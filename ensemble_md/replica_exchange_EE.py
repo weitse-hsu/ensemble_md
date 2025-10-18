@@ -460,7 +460,7 @@ class ReplicaExchangeEE:
                 self.modify_coords_fn = self.default_coords_fn
             elif self.modify_coords == 'number':
                 if self.resname_select is None or self.resname_transform is None:
-                    raise ParameterError('resname_select and resname_transform options must be filled in if using the change number function')
+                    raise ParameterError('resname_select and resname_transform options must be filled in if using the change number function')  # noqa: E501
                 # Read file
                 input_file = gmx_parser.read_top(self.top[-1], self.resname_transform)
                 # Determine the atom names corresponding to the atom numbers
@@ -1765,7 +1765,7 @@ class ReplicaExchangeEE:
                 start_line, atom_name, atom_num, state = coordinate_swap.get_names(input_file, resname)
 
                 # Determine the connectivity of all atoms
-                connect_1, connect_2 = [], [] # Atom 1 and atom 2 which are connected and which state they are dummy atoms  # noqa: E501
+                connect_1, connect_2 = [], []  # Atom 1 and atom 2 which are connected and which state they are dummy atoms  # noqa: E501
                 for l, line in enumerate(input_file[start_line:]):  # noqa: E741
                     line_sep = line.split(' ')
                     if line_sep[0] == ';':
@@ -1845,8 +1845,8 @@ class ReplicaExchangeEE:
         molA_new = open(molA_new_file_name, 'w')
 
         # Step 2: Determine how many of the molecule of interest are present in each system
-        numA, listA, trans_listA = coordinate_swap.deter_num_molecule(molA_file_name, self.resname_select, self.resname_transform)
-        numB, listB, trans_listB = coordinate_swap.deter_num_molecule(molB_file_name, self.resname_select, self.resname_transform)
+        numA, listA, trans_listA = coordinate_swap.deter_num_molecule(molA_file_name, self.resname_select, self.resname_transform)  # noqa: E501
+        numB, listB, trans_listB = coordinate_swap.deter_num_molecule(molB_file_name, self.resname_select, self.resname_transform)  # noqa: E501
 
         # Step 3: Fix break if present for solvated systems only
         if len(molA.topology.select('water')) != 0:
@@ -1862,7 +1862,7 @@ class ReplicaExchangeEE:
                 molB = coordinate_swap.fix_break(molB, self.resname_transform, B_dimensions, connection_map[connection_map['Resname'] == self.resname_transform], self.verbose, resid)  # noqa: E501
 
         # Step 3: Setup the coordinate DF for the molecules
-        name, resid, resname, swap = [],[],[],[]
+        name, resid, resname, swap = [], [], [], []
         for i in listA:
             for n in self.atom_names:
                 name.append(n)
@@ -1887,7 +1887,7 @@ class ReplicaExchangeEE:
                 resid.append(i)
                 resname.append(self.resname_transform)
                 swap.append('A2B')
-        df_atom_swap = pd.DataFrame({'Name': name, 'Resid': resid, 'Resname': resname,'Swap': swap})
+        df_atom_swap = pd.DataFrame({'Name': name, 'Resid': resid, 'Resname': resname, 'Swap': swap})
 
         # Step 4: Determine coordinates of all residues of interest  # noqa: E501
         df_atom_swap = coordinate_swap.get_miss_coord_by_num(molB, molA, self.resname_select, self.resname_transform, 'A2B', np.array(listB+trans_listB), listA, trans_listA, self.atom_names, df_atom_swap)  # noqa: E501
@@ -1917,7 +1917,7 @@ class ReplicaExchangeEE:
         while line_start < len(molA_file):
             if line_start is not None:
                 # Print up until we reach the residue to modify
-                line_start, atom_num_restart = coordinate_swap.write_unmodified(line_start, molA_file, molB_new,resname_opt, atom_num_restart, preamble_legth, molA_coords, resnum_restart)  # noqa: E501
+                line_start, atom_num_restart = coordinate_swap.write_unmodified(line_start, molA_file, molB_new, resname_opt, atom_num_restart, preamble_legth, molA_coords, resnum_restart)  # noqa: E501
             else:
                 break
 

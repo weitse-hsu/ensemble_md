@@ -439,9 +439,9 @@ def deter_atom_order(mol_file, resname, resid=None):
     else:
         resname_list = resname
         resid_list = resid
-    
+
     atom_order_all = []
-    for resname_i, resid_i in zip(resname_list, resid_list):    
+    for resname_i, resid_i in zip(resname_list, resid_list):
         atom_order = []
         for line in mol_file:
             split_line = line.split(' ')

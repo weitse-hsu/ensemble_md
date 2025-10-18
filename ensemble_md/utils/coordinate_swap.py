@@ -21,6 +21,7 @@ import pandas as pd
 from itertools import product
 import random
 
+
 def get_dimensions(file):
     """
     Determines the dimensions of the cubic box based on the input GRO file.
@@ -120,7 +121,7 @@ def fix_break(mol, resname, box_dimensions, atom_connect_all, verbose, resid=Non
     atom_pairs = []
     for atoms in atom_connect:
         if resid is not None:
-            atom_pairs.append(list(mol_top.select(f"resname {resname} and resid {resid-1} and (name {atoms[0]} or name {atoms[1]})")))
+            atom_pairs.append(list(mol_top.select(f"resname {resname} and resid {resid-1} and (name {atoms[0]} or name {atoms[1]})")))  # noqa: E501
         else:
             atom_pairs.append(list(mol_top.select(f"resname {resname} and (name {atoms[0]} or name {atoms[1]})")))
 
@@ -380,7 +381,7 @@ def get_miss_coord(mol_align, mol_ref, name_align, name_ref, df_atom_swap, dir, 
     return df_atom_swap
 
 
-def get_miss_coord_by_num(mol_target, mol_ref, select_name, transform_name, dir, np_target, list_ref, list_ref_trans, name_list, df_atom_swap):
+def get_miss_coord_by_num(mol_target, mol_ref, select_name, transform_name, dir, np_target, list_ref, list_ref_trans, name_list, df_atom_swap):  # noqa: E501
     """
     Gets coordinates for the missing atoms after the conformational swap
 
@@ -420,7 +421,7 @@ def get_miss_coord_by_num(mol_target, mol_ref, select_name, transform_name, dir,
         df_atom_swap['Y Coordinates'] = np.nan
         df_atom_swap['Z Coordinates'] = np.nan
 
-    # In the case where the target system has fewer of the molecule of interest then the reference just select molecule at random and use the coordinates
+    # In the case where the target system has fewer of the molecule of interest then the reference just select molecule at random and use the coordinates  # noqa: E501
     # Step 2: Determine which molecules will correspond to which after the swap
     if len(np_target) <= len(list_ref):
         adding_molecules = False
@@ -434,7 +435,7 @@ def get_miss_coord_by_num(mol_target, mol_ref, select_name, transform_name, dir,
     # Step 3: Get coordinates for each atom for molecules determined above
     np_target_remaining = copy.deepcopy(np_target)
     target_real = []
-    atom_counter = 0 # Keep track of when we move to the next resid number
+    atom_counter = 0  # Keep track of when we move to the next resid number
     for i, row in df_atom_swap[df_atom_swap['Swap'] == dir].iterrows():
         if row['Resname'] == select_name or adding_molecules is False:
             target_resid = int(row['Resid'])
@@ -450,7 +451,7 @@ def get_miss_coord_by_num(mol_target, mol_ref, select_name, transform_name, dir,
                 atom_counter += 1
             atomname = row['Name']
             atomid = mol_ref.topology.select(f'resid {ref_resid-1} and name {atomname}')[0]
-            coords = mol_ref.xyz[0,atomid,:]
+            coords = mol_ref.xyz[0, atomid, :]
 
             df_atom_swap.at[i, 'X Coordinates'] = coords[0]
             df_atom_swap.at[i, 'Y Coordinates'] = coords[1]
@@ -459,17 +460,14 @@ def get_miss_coord_by_num(mol_target, mol_ref, select_name, transform_name, dir,
     if adding_molecules is False:
         return df_atom_swap
 
-    # In the case where the target has more of a molecule than the reference we need to get new coordinates    
-    num_add = len(np_target) - len(list_ref)
-    added = 0
-    attempt = 0
+    # In the case where the target has more of a molecule than the reference we need to get new coordinates
     # Step 4: Align select atoms between the two systems
     while len(np_target_remaining) != 0:
         # Step 5: select coordinates for atom and add to DF
         sele_resid_add = np_target_remaining[0]
         np_target_remaining = np.delete(np_target_remaining, 0)
         for n, name in enumerate(name_list):
-            index_add = df_atom_swap[(df_atom_swap['Swap'] == dir) & (df_atom_swap['Resid'] == sele_resid_add) & (df_atom_swap['Name'] == name)].index[0]
+            index_add = df_atom_swap[(df_atom_swap['Swap'] == dir) & (df_atom_swap['Resid'] == sele_resid_add) & (df_atom_swap['Name'] == name)].index[0]  # noqa: E501
             index_traj = mol_target.topology.select(f'resid {sele_resid_add-1} and name {name}')[0]
             new_coords = mol_target.xyz[0, index_traj, :]
             if n == 0:
@@ -1102,7 +1100,7 @@ def get_names(input, resname):
         if line == '[ atoms ]\n':
             atom_section = True
         if line == '[ bonds ]\n':
-            start_line=l+2
+            start_line = l + 2
     return start_line, atom_name, np.array(atom_num), state
 
 
@@ -1241,7 +1239,6 @@ def _read_gro(side, resname_list, gro_list):
                 name.append(line[9:15].replace(' ', ''))
                 num.append(line[15:20])
 
-
     return name, num
 
 
@@ -1295,6 +1292,7 @@ def create_atom_map(gro_list, resname_list, swap_patterns):
         output_df = pd.concat([output_df, df])
     output_df.reindex()
     output_df.to_csv('atom_name_mapping.csv')
+
 
 def deter_num_molecule(gro, name, trans_name):
     """
