@@ -107,6 +107,8 @@ def main():
                 MDP.write(f"{REXEE.working_dir}/sim_{i}/iteration_0/{REXEE.mdp}", skipempty=True)
             if REXEE.modify_coords == 'default' and (not os.path.exists('residue_connect.csv') or not os.path.exists('residue_swap_map.csv')):  # noqa: E501
                 REXEE.process_top()
+            elif REXEE.modify_coords == 'number' and not os.path.exists('residue_connect.csv'):  # noqa: E501
+                REXEE.process_top()
 
         # 2-2. Run the first set of simulations
         REXEE.run_REXEE(0)
@@ -138,7 +140,9 @@ def main():
                 REXEE.g_vecs = [list(i) for i in np.load(args.g_vecs)]
             if REXEE.fixed_weights is not True and os.path.isfile(args.equil) is True:
                 REXEE.equil = np.load(args.equil)
-            print(REXEE.equil)
+                print(f'equil: {REXEE.equil}')
+            if REXEE.proposal == 'random_range' and os.path.isfile('track_swap_frame.npy'):
+                REXEE.track_swap_frame = list(np.load('track_swap_frame.npy'))
         else:
             start_idx = None
 
@@ -173,7 +177,8 @@ def main():
                 states = copy.deepcopy(states_)
                 weights = copy.deepcopy(weights_)
                 counts = copy.deepcopy(counts_)
-                swap_pattern, swap_list = REXEE.get_swapping_pattern(dhdl_files, states_)  # swap_list will only be used for modify_coords  # noqa: E501
+                swap_pattern, swap_list, swap_index, states = REXEE.get_swapping_pattern(dhdl_files, states_, i)  # swap_list will only be used for modify_coords  # noqa: E501
+                print(f'swap pattern: {swap_pattern}')
 
                 # 3-3. Perform weight correction/weight combination
                 if wl_delta != [None for i in range(REXEE.n_sim)]:  # weight-updating
@@ -267,6 +272,15 @@ def main():
                     # In run_REXEE(i, swap_pattern), where the tpr files will be generated, we use the top file at the
                     # level of the simulation (the file that will be shared by all simulations). For the gro file, we
                     # pass swap_pattern to the function to figure it out internally.
+
+                if REXEE.proposal == 'random_range':
+                    # 3-5. Keep track of the frames used for swapping in each trajectory
+                    track_frame = np.full(REXEE.n_sim, -1)
+                    for s in range(len(swap_list)):
+                        swap = swap_list[s]
+                        track_frame[swap[0]] = swap_index[s][0]
+                        track_frame[swap[1]] = swap_index[s][1]
+                    REXEE.track_swap_frame.append(track_frame)
             else:
                 swap_pattern, swap_list = None, None
 
@@ -304,6 +318,13 @@ def main():
             if REXEE.modify_coords_fn is not None:
                 try:
                     if rank == 0:
+                        # If previous swaps were performed undo them
+                        for j in range(REXEE.n_sim):
+                            gro_backup = f'{REXEE.working_dir}/sim_{j}/iteration_{i-1}/confout_backup.gro'
+                            gro = f'{REXEE.working_dir}/sim_{j}/iteration_{i-1}/confout.gro'
+                            if os.path.exists(gro_backup):
+                                os.rename(gro_backup, gro)
+
                         for j in range(len(swap_list)):
                             print('\nModifying the coordinates of the following output GRO files ...')
                             # gro_1 and gro_2 are the simlation outputs (that we want to back up) and the inputs to modify_coords  # noqa: E501
@@ -311,18 +332,14 @@ def main():
                             gro_2 = f'{REXEE.working_dir}/sim_{swap_list[j][1]}/iteration_{i-1}/confout.gro'
                             print(f'  - {gro_1}\n  - {gro_2}')
 
-                            # Check that swap was not performed before checkpoint was created
-                            if os.path.exists(gro_1.split('.gro')[0] + '_backup.gro') and os.path.exists(gro_2.split('.gro')[0] + '_backup.gro'):  # noqa: E501
-                                print('\nSwap already performed')
-                            else:
-                                # Now we rename gro_1 and gro_2 to back them up
-                                gro_1_backup = gro_1.split('.gro')[0] + '_backup.gro'
-                                gro_2_backup = gro_2.split('.gro')[0] + '_backup.gro'
-                                os.rename(gro_1, gro_1_backup)
-                                os.rename(gro_2, gro_2_backup)
+                            # Now we rename gro_1 and gro_2 to back them up
+                            gro_1_backup = gro_1.split('.gro')[0] + '_backup.gro'
+                            gro_2_backup = gro_2.split('.gro')[0] + '_backup.gro'
+                            os.rename(gro_1, gro_1_backup)
+                            os.rename(gro_2, gro_2_backup)
 
-                                # Here we input gro_1_backup and gro_2_backup and modify_coords_fn will save the modified gro files as gro_1 and gro_2  # noqa: E501
-                                REXEE.modify_coords_fn(gro_1_backup, gro_2_backup)  # the order should not matter
+                            # Here we input gro_1_backup and gro_2_backup and modify_coords_fn will save the modified gro files as gro_1 and gro_2  # noqa: E501
+                            REXEE.modify_coords_fn(gro_1_backup, gro_2_backup, swap_index[j])  # the order should not matter  # noqa: E501
                 except Exception:
                     print('\n--------------------------------------------------------------------------\n')
                     print(f'\nAn error occurred on rank 0:\n{traceback.format_exc()}')
@@ -342,6 +359,8 @@ def main():
                 np.save(args.ckpt, REXEE.rep_trajs)
                 if REXEE.fixed_weights is not True:
                     np.save(args.equil, REXEE.equil)
+                if REXEE.proposal == 'random_range':
+                    np.save('track_swap_frame.npy', REXEE.track_swap_frame)
 
     # Save the npy files at the end of the simulation anyway.
     if rank == 0:

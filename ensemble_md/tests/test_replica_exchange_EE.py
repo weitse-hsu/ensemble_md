@@ -90,7 +90,7 @@ class Test_ReplicaExchangeEE:
         params_dict['n_sim'] = 4  # so params_dict can be read without failing in the assertions below
 
         # 2. Available options
-        check_param_error(params_dict, 'proposal', "The specified proposal scheme is not available. Available options include 'single', 'neighboring', and 'exhaustive'.", 'cool', 'exhaustive')  # noqa: E501
+        check_param_error(params_dict, 'proposal', "The specified proposal scheme is not available. Available options include 'single', 'neighboring', 'exhaustive', 'random_range'.", 'cool', 'exhaustive')  # noqa: E501
         check_param_error(params_dict, 'df_method', "The specified free energy estimator is not available. Available options include 'TI', 'BAR', and 'MBAR'.")  # noqa: E501
         check_param_error(params_dict, 'err_method', "The specified method for error estimation is not available. Available options include 'propagate', and 'bootstrap'.")  # noqa: E501
 
@@ -652,22 +652,51 @@ class Test_ReplicaExchangeEE:
         REXEE = get_REXEE_instance(params_dict)
         REXEE.state_ranges = [list(range(i, i + 5)) for i in range(REXEE.n_sim)]  # 5 states per replica
         states = [4, 2, 2, 7]   # This would lead to the swappables: [(0, 1), (0, 2), (1, 2)] in the standard case
+        dhdl_files = [os.path.join(input_path, f"dhdl/dhdl_{i}.xvg") for i in range(4)]
 
         # Case 1: Any case that is not neighboring swap has the same definition for the swappable pairs
-        swappables = REXEE.identify_swappable_pairs(states, REXEE.state_ranges, REXEE.proposal == 'neighboring')
+        swappables, swap_index, states_for_swap = REXEE.identify_swappable_pairs(states, REXEE.state_ranges, dhdl_files)  # noqa: E501
         assert swappables == [(0, 1), (0, 2), (1, 2)]
+        assert swap_index == []
+        assert states_for_swap == []
 
         # Case 2: Neighboring exchange
         REXEE.proposal = 'neighboring'
-        swappables = REXEE.identify_swappable_pairs(states, REXEE.state_ranges, REXEE.proposal == 'neighboring')
+        swappables, swap_index, states_for_swap = REXEE.identify_swappable_pairs(states, REXEE.state_ranges, dhdl_files)  # noqa: E501
         assert swappables == [(0, 1), (1, 2)]
+        assert swap_index == []
+        assert states_for_swap == []
 
         # Case 3: Non-neighboring exchange, with add_swappables
         REXEE.proposal = 'exhaustive'
         REXEE.add_swappables = [[3, 7], [4, 7]]
         states = [4, 3, 2, 7]  # Without add_swappables, the swappables would be [(0, 1), (0, 2), (1, 2)]
-        swappables = REXEE.identify_swappable_pairs(states, REXEE.state_ranges, REXEE.proposal == 'neighboring', REXEE.add_swappables)  # noqa: E501
+        swappables, swap_index, states_for_swap = REXEE.identify_swappable_pairs(states, REXEE.state_ranges, dhdl_files)  # noqa: E501
         assert swappables == [(0, 1), (0, 2), (1, 2), (0, 3), (1, 3)]
+        assert swap_index == []
+        assert states_for_swap == []
+
+        # Case 4: Random Range
+        REXEE = get_REXEE_instance(params_dict)
+        REXEE.proposal = 'random_range'
+        REXEE.state_ranges = [list(range(i, i + 7)) for i in [0, 7, 14, 21]]
+        states = [5, 7, 13, 25]
+        REXEE.add_swappables = [[6, 7], [13, 14], [20, 21]]
+        REXEE.n_tot = 28
+        REXEE.s = 7
+        REXEE.template['nstdhdl'] = 100
+        REXEE.template['nstxout'] = 1000
+        REXEE.template['n_sim'] = 4
+
+        dhdl_files = [
+            os.path.join(input_path, f"dhdl/random-range/dhdl_{i}.xvg") for i in range(REXEE.n_sim)
+        ]
+        swappables, swap_index, states_for_swap = REXEE.identify_swappable_pairs(states, REXEE.state_ranges, dhdl_files)  # noqa: E501
+
+        assert swappables == [[0, 1]]
+        assert swap_index[0][0] in [14, 15, 16]
+        assert swap_index[0][1] in [10, 12, 16, 19]
+        assert states_for_swap[0] == [6, 7]
 
     def test_propose_swap(self, params_dict):
         random.seed(0)
@@ -687,24 +716,29 @@ class Test_ReplicaExchangeEE:
         REXEE.verbose = False
         states = [0, 6, 7, 8]  # No swappable pairs
         f = copy.deepcopy(dhdl_files)
-        pattern, swap_list = REXEE.get_swapping_pattern(f, states)
+        pattern, swap_list, swap_index_accept, states_modified = REXEE.get_swapping_pattern(f, states)
         assert REXEE.n_empty_swappable == 1
         assert REXEE.n_swap_attempts == 0
         assert REXEE.n_rejected == 0
         assert pattern == [0, 1, 2, 3]
         assert swap_list == []
+        assert swap_index_accept == []
+        assert states_modified == states
 
         # Test 2: Empty swap list, neighboring proposal
         REXEE = get_REXEE_instance(params_dict)
         REXEE.proposal = 'neighboring'  # n_ex will be set to 1 automatically.
         states = [0, 6, 7, 8]  # No swappable pairs
         f = copy.deepcopy(dhdl_files)
-        pattern, swap_list = REXEE.get_swapping_pattern(f, states)
+        pattern, swap_list, swap_index_accept, states_modified = REXEE.get_swapping_pattern(f, states)
+        print(f'2: {swap_index_accept} {states_modified}')
         assert REXEE.n_empty_swappable == 1
         assert REXEE.n_swap_attempts == 0
         assert REXEE.n_rejected == 0
         assert pattern == [0, 1, 2, 3]
         assert swap_list == []
+        assert swap_index_accept == []
+        assert states_modified == states
 
         # Test 3: Single swap (proposal = 'single')
         random.seed(0)
@@ -713,11 +747,13 @@ class Test_ReplicaExchangeEE:
         REXEE.proposal = 'single'  # n_ex will be set to 1 automatically.
         states = [5, 2, 2, 8]  # swappable pairs: [(0, 1), (0, 2), (1, 2)], swap = (1, 2), accept
         f = copy.deepcopy(dhdl_files)
-        pattern, swap_list = REXEE.get_swapping_pattern(f, states)
+        pattern, swap_list, swap_index_accept, states_modified = REXEE.get_swapping_pattern(f, states)
         assert REXEE.n_swap_attempts == 1
         assert REXEE.n_rejected == 0
         assert pattern == [0, 2, 1, 3]
         assert swap_list == [(1, 2)]
+        assert swap_index_accept == [[-1, -1]]
+        assert states_modified == states
 
         # Test 4: Neighboring swap
         random.seed(0)
@@ -725,11 +761,13 @@ class Test_ReplicaExchangeEE:
         REXEE.proposal = 'neighboring'  # n_ex will be set to 1 automatically.
         states = [5, 2, 2, 8]  # swappable pairs: [(0, 1), (0, 2), (1, 2)], swap = (1, 2), accept
         f = copy.deepcopy(dhdl_files)
-        pattern, swap_list = REXEE.get_swapping_pattern(f, states)
+        pattern, swap_list, swap_index_accept, states_modified = REXEE.get_swapping_pattern(f, states)
         assert REXEE.n_swap_attempts == 1
         assert REXEE.n_rejected == 0
         assert pattern == [0, 2, 1, 3]
         assert swap_list == [(1, 2)]
+        assert swap_index_accept == [[-1, -1]]
+        assert states_modified == states
 
         # Test 5: Exhaustive swaps that end up in a single swap
         random.seed(0)
@@ -737,11 +775,13 @@ class Test_ReplicaExchangeEE:
         REXEE.proposal = 'exhaustive'
         states = [5, 2, 2, 8]  # swappable pairs: [(0, 1), (0, 2), (1, 2)], swap = (1, 2), accept
         f = copy.deepcopy(dhdl_files)
-        pattern, swap_list = REXEE.get_swapping_pattern(f, states)
+        pattern, swap_list, swap_index_accept, states_modified = REXEE.get_swapping_pattern(f, states)
         assert REXEE.n_swap_attempts == 1
         assert REXEE.n_rejected == 0
         assert pattern == [0, 2, 1, 3]
         assert swap_list == [(1, 2)]
+        assert swap_index_accept == [[-1, -1]]
+        assert states_modified == states
 
         # Test 6: Exhaustive swaps that involve multiple attempted swaps
         random.seed(0)
@@ -749,11 +789,13 @@ class Test_ReplicaExchangeEE:
         REXEE.proposal = 'exhaustive'
         states = [4, 2, 4, 3]  # swappable pairs: [(0, 1), (0, 2), (0, 3), (1, 2), (2, 3)]; swap 1: (2, 3), accepted; swap 2: (0, 1), accept  # noqa: E501
         f = copy.deepcopy(dhdl_files)
-        pattern, swap_list = REXEE.get_swapping_pattern(f, states)
+        pattern, swap_list, swap_index_accept, states_modified = REXEE.get_swapping_pattern(f, states)
         assert REXEE.n_swap_attempts == 2   # \Delta is negative for both swaps -> both accepted
         assert REXEE.n_rejected == 0
         assert pattern == [1, 0, 3, 2]
         assert swap_list == [(2, 3), (0, 1)]
+        assert swap_index_accept == [[-1, -1], [-1, -1]]
+        assert states_modified == states
 
         # Test 7: REXEE.proposal is set to exhaustive but there is only one swappable pair anyway.
         random.seed(0)
@@ -761,11 +803,13 @@ class Test_ReplicaExchangeEE:
         REXEE.proposal = 'exhaustive'
         states = [0, 2, 2, 8]  # swappable pair: [(1, 2)], swap: (1, 2), accept
         f = copy.deepcopy(dhdl_files)
-        pattern, swap_list = REXEE.get_swapping_pattern(f, states)
+        pattern, swap_list, swap_index_accept, states_modified = REXEE.get_swapping_pattern(f, states)
         assert REXEE.n_swap_attempts == 1
         assert REXEE.n_rejected == 0
         assert pattern == [0, 2, 1, 3]
         assert swap_list == [(1, 2)]
+        assert swap_index_accept == [[-1, -1]]
+        assert states_modified == states
 
         # Test 8: modify_coords_fn is not None, so swap_bool is always True
         random.seed(0)
@@ -773,11 +817,13 @@ class Test_ReplicaExchangeEE:
         REXEE.modify_coords_fn = 'Cool'
         states = [5, 2, 2, 8]  # swappable pairs: [(0, 1), (0, 2), (1, 2)], swap = (1, 2), accept
         f = copy.deepcopy(dhdl_files)
-        pattern, swap_list = REXEE.get_swapping_pattern(f, states)
+        pattern, swap_list, swap_index_accept, states_modified = REXEE.get_swapping_pattern(f, states)
         assert REXEE.n_swap_attempts == 1
         assert REXEE.n_rejected == 0
         assert pattern == [0, 2, 1, 3]
         assert swap_list == [(1, 2)]
+        assert swap_index_accept == [[-1, -1]]
+        assert states_modified == states
 
     def test_calc_prob_acc(self, capfd, params_dict):
         # k = 1.380649e-23; NA = 6.0221408e23; T = 298; kT = k * NA * T / 1000 = 2.4777098766670016
@@ -916,7 +962,7 @@ class Test_ReplicaExchangeEE:
         os.system(f'cp {input_path}/coord_swap/residue_connect.csv .')
         os.system(f'cp {input_path}/coord_swap/atom_name_mapping.csv .')
         os.system(f'cp {input_path}/coord_swap/residue_swap_map.csv .')
-        REXEE.default_coords_fn(f'{input_path}/coord_swap/sim_A/confout_backup.gro', f'{input_path}/coord_swap/sim_B/confout_backup.gro')  # noqa: E501
+        REXEE.default_coords_fn(f'{input_path}/coord_swap/sim_A/confout_backup.gro', f'{input_path}/coord_swap/sim_B/confout_backup.gro', [-1, -1])  # noqa: E501
 
         true_output_A = open(f'{input_path}/coord_swap/output_A.gro', 'r').readlines()
         test_output_A = open(f'{input_path}/coord_swap/sim_B/confout.gro', 'r').readlines()
@@ -932,7 +978,7 @@ class Test_ReplicaExchangeEE:
         os.system(f'cp {input_path}/coord_swap/residue_connect_alt.csv residue_connect.csv')
         os.system(f'cp {input_path}/coord_swap/atom_name_mapping_alt.csv atom_name_mapping.csv')
         os.system(f'cp {input_path}/coord_swap/residue_swap_map_alt.csv residue_swap_map.csv')
-        REXEE.default_coords_fn(f'{input_path}/coord_swap/sim_C/confout_backup.gro', f'{input_path}/coord_swap/sim_D/confout_backup.gro')  # noqa: E501
+        REXEE.default_coords_fn(f'{input_path}/coord_swap/sim_C/confout_backup.gro', f'{input_path}/coord_swap/sim_D/confout_backup.gro', [-1, -1])  # noqa: E501
 
         true_output_C = open(f'{input_path}/coord_swap/output_C.gro', 'r').readlines()
         test_output_C = open(f'{input_path}/coord_swap/sim_D/confout.gro', 'r').readlines()

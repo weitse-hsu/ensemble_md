@@ -58,13 +58,13 @@ def test_fix_break():
     broken_mol = md.load(f'{input_path}/coord_swap/broken_mol_1D.gro')
     df_connect = pd.read_csv(f'{input_path}/coord_swap/residue_connect.csv')
     df_connect_res = df_connect[df_connect['Resname'] == 'C2D']
-    test_fix = coordinate_swap.fix_break(broken_mol, 'C2D', [2.74964, 2.74964, 2.74964], df_connect_res)
+    test_fix = coordinate_swap.fix_break(broken_mol, 'C2D', [2.74964, 2.74964, 2.74964], df_connect_res, False, 1)
 
     broken_mol_3D = md.load(f'{input_path}/coord_swap/broken_mol_3D.gro')
-    test_fix_3D = coordinate_swap.fix_break(broken_mol_3D, 'C2D', [2.74964, 2.74964, 2.74964], df_connect_res)
+    test_fix_3D = coordinate_swap.fix_break(broken_mol_3D, 'C2D', [2.74964, 2.74964, 2.74964], df_connect_res, False, 1)
 
     already_fixed = md.load(f'{input_path}/coord_swap/fixed_mol.gro')
-    still_fixed = coordinate_swap.fix_break(already_fixed, 'C2D', [2.74964, 2.74964, 2.74964], df_connect_res)
+    still_fixed = coordinate_swap.fix_break(already_fixed, 'C2D', [2.74964, 2.74964, 2.74964], df_connect_res, False, 1)
 
     fixed_mol = md.load(f'{input_path}/coord_swap/fixed_mol.gro')
 
@@ -139,8 +139,8 @@ def test_get_miss_coord():
 
     A_dimensions = coordinate_swap.get_dimensions(open(molA_file, 'r').readlines())
     B_dimensions = coordinate_swap.get_dimensions(open(molB_file, 'r').readlines())
-    molA = coordinate_swap.fix_break(molA, nameA, A_dimensions, connection_map[connection_map['Resname'] == nameA])
-    molB = coordinate_swap.fix_break(molB, nameB, B_dimensions, connection_map[connection_map['Resname'] == nameB])
+    molA = coordinate_swap.fix_break(molA, nameA, A_dimensions, connection_map[connection_map['Resname'] == nameA], False)
+    molB = coordinate_swap.fix_break(molB, nameB, B_dimensions, connection_map[connection_map['Resname'] == nameB], False)
 
     df_no_coords = pd.read_csv(f'{input_path}/coord_swap/extract_missing.csv')
     df = pd.read_csv(f'{input_path}/coord_swap/df_atom_swap.csv')
@@ -273,7 +273,7 @@ def test_get_names():
     top_files = ['A-B.itp', 'B-C.itp', 'C-D.itp', 'D-E.itp', 'E-F.itp']
     resnames = ['A2B', 'B2C', 'C2D', 'D2E', 'E2F']
 
-    start_lines = [26, 29, 33, 32, 36]
+    start_lines = [27, 30, 34, 33, 37]
     names = [['S1', 'C2', 'N3', 'C4', 'C5', 'C6', 'H1', 'H2', 'H3', 'H4', 'H17', 'DC7', 'HV5', 'HV6', 'HV7'], ['S1', 'C2', 'N3', 'C4', 'C5', 'C6', 'C7', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7', 'DC8', 'HV8', 'HV9', 'HV10'], ['S1', 'C2', 'N3', 'C4', 'C5', 'C6', 'C7', 'C8', 'H1', 'H2', 'H3', 'H4', 'H6', 'H7', 'H8', 'H9', 'H10', 'DC9', 'HV5', 'HV11', 'HV12', 'HV13'], ['S1', 'C2', 'N3', 'C4', 'C5', 'C6', 'C7', 'C9', 'H1', 'H2', 'H3', 'H5', 'H6', 'H7', 'H11', 'H12', 'H13', 'DC8', 'HV8', 'HV9', 'HV10'], ['S1', 'C2', 'N3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'H1', 'H2', 'H3', 'H6', 'H7', 'H8', 'H9', 'H10', 'H11', 'H12', 'H13', 'DC10', 'HV4', 'HV14', 'HV15', 'HV16']]  # noqa: E501
 
     lambda_states = [[-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 0, 0, 0, 0],
@@ -345,7 +345,7 @@ def test_create_atom_map():
     swap_pattern = [[[0, 1], [1, 0]], [[1, 1], [2, 0]], [[2, 1], [3, 0]], [[3, 1], [4, 0]]]
 
     atom_name_mapping_true = pd.read_csv(f'{input_path}/coord_swap/atom_name_mapping.csv')
-    coordinate_swap.create_atom_map(gro, names, swap_pattern)
+    coordinate_swap.create_atom_map(gro, names, swap_pattern, True)
     atom_name_mapping_test = pd.read_csv('atom_name_mapping.csv')
     assert (atom_name_mapping_true == atom_name_mapping_test).all
     os.remove('atom_name_mapping.csv')
