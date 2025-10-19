@@ -106,6 +106,10 @@ def fix_break(mol, resname, box_dimensions, atom_connect_all, verbose, resid=Non
     atom_connect_all : pandas.DataFrame
         A pandas DataFrame which contains the name of all atoms which are connected to one another
         in the residue of interest
+    verbose : boolean
+        Whether print statements should be made or not
+    resid : None or int
+        The reisude ID of the molecule of interest if multiple residues of the same name
 
     Returns
     -------
@@ -989,7 +993,7 @@ def write_unmodified(line_start, orig_file, new_file, old_res_name, atom_num, pr
     return line_restart, atom_num_restart
 
 
-def _sep_num_element(atom_name):
+def _sep_num_element(atom_name, allow_virtual_V):
     """
     Seperate the atom name into the element and the atom number
 
@@ -997,6 +1001,8 @@ def _sep_num_element(atom_name):
     ----------
     atom_name : str
         Name of the atom to be seperated
+    allow_virtual_V : bool
+        Should the use of a V to indicate virtual atoms be allowed
 
     Returns
     -------
@@ -1022,7 +1028,7 @@ def _sep_num_element(atom_name):
             extra = ''.join(list(atom_identifier)[1:])
         else:
             extra = ''
-    if 'V' in extra:
+    if allow_virtual_V and 'V' in extra:
         extra = extra.strip('V')
     return element, num, extra
 
@@ -1246,7 +1252,7 @@ def _read_gro(side, resname_list, gro_list):
     return name, num
 
 
-def create_atom_map(gro_list, resname_list, swap_patterns):
+def create_atom_map(gro_list, resname_list, swap_patterns, allow_virtual_V=False):
     """
     If you generate your hybrid topologies in a way that the
     same atom has the same name in each molecule then this
@@ -1260,6 +1266,8 @@ def create_atom_map(gro_list, resname_list, swap_patterns):
         list of residue names with the transformation
     swap_patterns : list of list of intergers
         swapping pattern between simulations
+    allow_virtual_V : bool
+        Should the use of a V to indicate virtual atoms be allowed
 
     Returns
     -------
@@ -1272,7 +1280,7 @@ def create_atom_map(gro_list, resname_list, swap_patterns):
 
         atomnameA, atomidA, atomnameB, atomidB = [], [], [], []
         for n, name in enumerate(nameA):
-            element, num, extra = _sep_num_element(name)
+            element, num, extra = _sep_num_element(name, allow_virtual_V)
             if name in nameB:
                 atomnameA.append(name)
                 atomidA.append(numA[n])
@@ -1290,6 +1298,12 @@ def create_atom_map(gro_list, resname_list, swap_patterns):
                 atomidA.append(numA[n])
                 nb = nameB.index(f'D{element}{num}')
                 atomnameB.append(f'D{element}{num}')
+                atomidB.append(numB[nb])
+            elif allow_virtual_V is True and f'{element}V{num}' in nameB:
+                atomnameA.append(name)
+                atomidA.append(numA[n])
+                nb = nameB.index(f'{element}V{num}')
+                atomnameB.append(f'{element}V{num}')
                 atomidB.append(numB[nb])
 
         df = pd.DataFrame({'resname A': resname_list[swap_pattern[0][0]], 'resname B': resname_list[swap_pattern[1][0]], 'atomid A': atomidA, 'atom name A': atomnameA, 'atomid B': atomidB, 'atom name B': atomnameB})  # noqa: E501

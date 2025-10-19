@@ -164,6 +164,7 @@ class ReplicaExchangeEE:
             "resname_transform": None,
             "resname_list": None,
             "swap_rep_pattern": None,
+            "allow_virtual_V": False, # Allow use of V to indicate virtual atoms in topology
             "nst_sim": None,
             "proposal": 'exhaustive',
             "w_combine": False,
@@ -255,7 +256,7 @@ class ReplicaExchangeEE:
         if self.working_dir == '':
             self.working_dir = '.'
 
-        params_bool = ['verbose', 'rm_cpt', 'msm', 'free_energy', 'subsampling_avg', 'w_combine']
+        params_bool = ['verbose', 'rm_cpt', 'msm', 'free_energy', 'subsampling_avg', 'w_combine', 'allow_virtual_V']
         for i in params_bool:
             if type(getattr(self, i)) != bool:
                 raise ParameterError(f"The parameter '{i}' should be a boolean variable.")
@@ -1720,7 +1721,7 @@ class ReplicaExchangeEE:
         function. Output as csv files to prevent needing to re-run this step.
         """
         if not os.path.exists('atom_name_mapping.csv') and self.resname_list is not None:
-            coordinate_swap.create_atom_map(self.gro, self.resname_list, self.swap_rep_pattern)
+            coordinate_swap.create_atom_map(self.gro, self.resname_list, self.swap_rep_pattern, self.allow_virtual_V)
             atom_name_mapping = pd.read_csv('atom_name_mapping.csv')
         elif self.resname_list is not None:
             atom_name_mapping = pd.read_csv('atom_name_mapping.csv')
