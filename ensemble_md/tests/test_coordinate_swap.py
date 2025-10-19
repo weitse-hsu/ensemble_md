@@ -61,10 +61,10 @@ def test_fix_break():
     test_fix = coordinate_swap.fix_break(broken_mol, 'C2D', [2.74964, 2.74964, 2.74964], df_connect_res, False, 1)
 
     broken_mol_3D = md.load(f'{input_path}/coord_swap/broken_mol_3D.gro')
-    test_fix_3D = coordinate_swap.fix_break(broken_mol_3D, 'C2D', [2.74964, 2.74964, 2.74964], df_connect_res, False, 1)
+    test_fix_3D = coordinate_swap.fix_break(broken_mol_3D, 'C2D', [2.74964, 2.74964, 2.74964], df_connect_res, False, 1)  # noqa: E501
 
     already_fixed = md.load(f'{input_path}/coord_swap/fixed_mol.gro')
-    still_fixed = coordinate_swap.fix_break(already_fixed, 'C2D', [2.74964, 2.74964, 2.74964], df_connect_res, False, 1)
+    still_fixed = coordinate_swap.fix_break(already_fixed, 'C2D', [2.74964, 2.74964, 2.74964], df_connect_res, False, 1)  # noqa: E501
 
     fixed_mol = md.load(f'{input_path}/coord_swap/fixed_mol.gro')
 
@@ -139,8 +139,8 @@ def test_get_miss_coord():
 
     A_dimensions = coordinate_swap.get_dimensions(open(molA_file, 'r').readlines())
     B_dimensions = coordinate_swap.get_dimensions(open(molB_file, 'r').readlines())
-    molA = coordinate_swap.fix_break(molA, nameA, A_dimensions, connection_map[connection_map['Resname'] == nameA], False)
-    molB = coordinate_swap.fix_break(molB, nameB, B_dimensions, connection_map[connection_map['Resname'] == nameB], False)
+    molA = coordinate_swap.fix_break(molA, nameA, A_dimensions, connection_map[connection_map['Resname'] == nameA], False)  # noqa: E501
+    molB = coordinate_swap.fix_break(molB, nameB, B_dimensions, connection_map[connection_map['Resname'] == nameB], False)  # noqa: E501
 
     df_no_coords = pd.read_csv(f'{input_path}/coord_swap/extract_missing.csv')
     df = pd.read_csv(f'{input_path}/coord_swap/df_atom_swap.csv')
