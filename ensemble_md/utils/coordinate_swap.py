@@ -1287,25 +1287,24 @@ def create_atom_map(gro_list, resname_list, swap_patterns, allow_virtual_V=False
                 nb = nameB.index(name)
                 atomnameB.append(name)
                 atomidB.append(numB[nb])
-            elif f'{element}{num}' in nameB:
+            elif f'{element}{extra}{num}' in nameB:
                 atomnameA.append(name)
                 atomidA.append(numA[n])
-                nb = nameB.index(f'{element}{num}')
-                atomnameB.append(f'{element}{num}')
+                nb = nameB.index(f'{element}{extra}{num}')
+                atomnameB.append(f'{element}{extra}{num}')
                 atomidB.append(numB[nb])
-            elif f'D{element}{num}' in nameB:
+            elif f'D{element}{extra}{num}' in nameB:
                 atomnameA.append(name)
                 atomidA.append(numA[n])
-                nb = nameB.index(f'D{element}{num}')
-                atomnameB.append(f'D{element}{num}')
+                nb = nameB.index(f'D{element}{extra}{num}')
+                atomnameB.append(f'D{element}{extra}{num}')
                 atomidB.append(numB[nb])
-            elif allow_virtual_V is True and f'{element}V{num}' in nameB:
+            elif allow_virtual_V is True and f'{element}V{extra}{num}' in nameB:
                 atomnameA.append(name)
                 atomidA.append(numA[n])
                 nb = nameB.index(f'{element}V{num}')
                 atomnameB.append(f'{element}V{num}')
                 atomidB.append(numB[nb])
-
         df = pd.DataFrame({'resname A': resname_list[swap_pattern[0][0]], 'resname B': resname_list[swap_pattern[1][0]], 'atomid A': atomidA, 'atom name A': atomnameA, 'atomid B': atomidB, 'atom name B': atomnameB})  # noqa: E501
         output_df = pd.concat([output_df, df])
     output_df.reindex()
