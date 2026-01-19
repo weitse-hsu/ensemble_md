@@ -164,7 +164,7 @@ class ReplicaExchangeEE:
             "resname_transform": None,
             "resname_list": None,
             "swap_rep_pattern": None,
-            "allow_virtual_V": False,  # Allow use of V to indicate virtual atoms in topology
+            "allow_virtual_V": True,  # Allow use of V to indicate virtual atoms in topology
             "nst_sim": None,
             "proposal": 'exhaustive',
             "w_combine": False,
