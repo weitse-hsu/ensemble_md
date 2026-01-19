@@ -164,7 +164,7 @@ class ReplicaExchangeEE:
             "resname_transform": None,
             "resname_list": None,
             "swap_rep_pattern": None,
-            "allow_virtual_V": True,
+            "allow_virtual_V": True,  # Allow use of V to indicate virtual atoms in topology
             "nst_sim": None,
             "proposal": 'exhaustive',
             "w_combine": False,
@@ -256,7 +256,7 @@ class ReplicaExchangeEE:
         if self.working_dir == '':
             self.working_dir = '.'
 
-        params_bool = ['verbose', 'rm_cpt', 'msm', 'free_energy', 'subsampling_avg', 'w_combine']
+        params_bool = ['verbose', 'rm_cpt', 'msm', 'free_energy', 'subsampling_avg', 'w_combine', 'allow_virtual_V']
         for i in params_bool:
             if type(getattr(self, i)) != bool:
                 raise ParameterError(f"The parameter '{i}' should be a boolean variable.")

@@ -677,10 +677,11 @@ class Test_ReplicaExchangeEE:
         assert states_for_swap == []
 
         # Case 4: Random Range
+        REXEE = get_REXEE_instance(params_dict)
         REXEE.proposal = 'random_range'
         REXEE.state_ranges = [list(range(i, i + 7)) for i in [0, 7, 14, 21]]
-        states = [[6, 7], [13, 14], [20, 21]]
-        REXEE = get_REXEE_instance(params_dict)
+        states = [5, 7, 13, 25]
+        REXEE.add_swappables = [[6, 7], [13, 14], [20, 21]]
         REXEE.n_tot = 28
         REXEE.s = 7
         REXEE.template['nstdhdl'] = 100
@@ -692,7 +693,7 @@ class Test_ReplicaExchangeEE:
         ]
         swappables, swap_index, states_for_swap = REXEE.identify_swappable_pairs(states, REXEE.state_ranges, dhdl_files)  # noqa: E501
 
-        assert swappables[0] == [0, 1]
+        assert swappables == [[0, 1]]
         assert swap_index[0][0] in [14, 15, 16]
         assert swap_index[0][1] in [10, 12, 16, 19]
         assert states_for_swap[0] == [6, 7]
@@ -1005,6 +1006,7 @@ class Test_ReplicaExchangeEE:
                      f'{input_path}/coord_swap/E-F.gro']
         REXEE.resname_list = ['A2B', 'B2C', 'C2D', 'D2E', 'E2F']
         REXEE.swap_rep_pattern = [[[0, 1], [1, 0]], [[1, 1], [2, 0]], [[2, 1], [3, 0]], [[3, 1], [4, 0]]]
+        REXEE.allow_virtual_V = True
         REXEE.top = [f'{input_path}/coord_swap/A-B.top',
                      f'{input_path}/coord_swap/B-C.top',
                      f'{input_path}/coord_swap/C-D.top',

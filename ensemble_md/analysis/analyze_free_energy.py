@@ -274,16 +274,16 @@ def _calculate_df(estimators):
     """
     # Compute FE estimate
     df = estimators[0].delta_f_
-    l = np.linspace(0, 1, num=len(df.index))  # noqa: E741
-    df.index = l
-    df.columns = l
+    lam = np.linspace(0, 1, num=len(df.index))
+    df.index = lam
+    df.columns = lam
     est = df.loc[0, 1]
 
     # Compute FE extimate error
     df_err = estimators[0].d_delta_f_
-    l = np.linspace(0, 1, num=len(df_err.index))  # noqa: E741
-    df_err.index = l
-    df_err.columns = l
+    lam = np.linspace(0, 1, num=len(df_err.index))
+    df_err.index = lam
+    df_err.columns = lam
     err = df_err.loc[0, 1]
 
     return est, err

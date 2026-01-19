@@ -106,6 +106,10 @@ def fix_break(mol, resname, box_dimensions, atom_connect_all, verbose, resid=Non
     atom_connect_all : pandas.DataFrame
         A pandas DataFrame which contains the name of all atoms which are connected to one another
         in the residue of interest
+    verbose : boolean
+        Whether print statements should be made or not
+    resid : None or int
+        The reisude ID of the molecule of interest if multiple residues of the same name
 
     Returns
     -------
@@ -846,6 +850,10 @@ def write_modified(df_atom_swap, swap, line_start, orig_file, new_file, atom_num
             write_line(new_file, atom, atom_num, vel, [x, y, z], resnum, new_res_name)
         atom_num += 1
 
+        # GRO files atom number has a limit of 5 digits so restart when we get to 6
+        if atom_num == 100000:
+            atom_num = 1
+
     for i in range(line_start, len(orig_file)-1):
         # Process input lines
         line, prev_line = _process_line(orig_file, i)
@@ -985,7 +993,7 @@ def write_unmodified(line_start, orig_file, new_file, old_res_name, atom_num, pr
     return line_restart, atom_num_restart
 
 
-def _sep_num_element(atom_name):
+def _sep_num_element(atom_name, allow_virtual_V):
     """
     Seperate the atom name into the element and the atom number
 
@@ -993,6 +1001,8 @@ def _sep_num_element(atom_name):
     ----------
     atom_name : str
         Name of the atom to be seperated
+    allow_virtual_V : bool
+        Should the use of a V to indicate virtual atoms be allowed
 
     Returns
     -------
@@ -1018,7 +1028,7 @@ def _sep_num_element(atom_name):
             extra = ''.join(list(atom_identifier)[1:])
         else:
             extra = ''
-    if 'V' in extra:
+    if allow_virtual_V and 'V' in extra:
         extra = extra.strip('V')
     return element, num, extra
 
@@ -1256,6 +1266,8 @@ def create_atom_map(gro_list, resname_list, swap_patterns, allow_virtual_V=True)
         list of residue names with the transformation
     swap_patterns : list of list of intergers
         swapping pattern between simulations
+    allow_virtual_V : bool
+        Should the use of a V to indicate virtual atoms be allowed
 
     Returns
     -------
@@ -1268,27 +1280,31 @@ def create_atom_map(gro_list, resname_list, swap_patterns, allow_virtual_V=True)
 
         atomnameA, atomidA, atomnameB, atomidB = [], [], [], []
         for n, name in enumerate(nameA):
-            element, num, extra = _sep_num_element(name)
+            element, num, extra = _sep_num_element(name, allow_virtual_V)
             if name in nameB:
                 atomnameA.append(name)
                 atomidA.append(numA[n])
                 nb = nameB.index(name)
                 atomnameB.append(name)
                 atomidB.append(numB[nb])
-            elif f'{element}{num}' in nameB:
+            elif f'{element}{extra}{num}' in nameB:
                 atomnameA.append(name)
                 atomidA.append(numA[n])
-                nb = nameB.index(f'{element}{num}')
-                atomnameB.append(f'{element}{num}')
+                nb = nameB.index(f'{element}{extra}{num}')
+                atomnameB.append(f'{element}{extra}{num}')
                 atomidB.append(numB[nb])
-            elif f'D{element}{num}' in nameB:
+            elif f'D{element}{extra}{num}' in nameB:
                 atomnameA.append(name)
                 atomidA.append(numA[n])
-                nb = nameB.index(f'D{element}{num}')
-                atomnameB.append(f'D{element}{num}')
+                nb = nameB.index(f'D{element}{extra}{num}')
+                atomnameB.append(f'D{element}{extra}{num}')
                 atomidB.append(numB[nb])
-            
-
+            elif allow_virtual_V is True and f'{element}V{extra}{num}' in nameB:
+                atomnameA.append(name)
+                atomidA.append(numA[n])
+                nb = nameB.index(f'{element}V{num}')
+                atomnameB.append(f'{element}V{num}')
+                atomidB.append(numB[nb])
         df = pd.DataFrame({'resname A': resname_list[swap_pattern[0][0]], 'resname B': resname_list[swap_pattern[1][0]], 'atomid A': atomidA, 'atom name A': atomnameA, 'atomid B': atomidB, 'atom name B': atomnameB})  # noqa: E501
         output_df = pd.concat([output_df, df])
     output_df.reindex()

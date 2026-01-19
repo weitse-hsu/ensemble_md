@@ -7,6 +7,14 @@
 #    Copyright (c) 2022 University of Colorado Boulder             #
 #                                                                  #
 ####################################################################
+from ensemble_md.utils import utils  # noqa: E402
+from ensemble_md.utils import gmx_parser  # noqa: E402
+from ensemble_md.analysis import analyze_traj  # noqa: E402
+from ensemble_md.analysis import analyze_matrix  # noqa: E402
+from ensemble_md.analysis import msm_analysis  # noqa: E402
+from ensemble_md.analysis import analyze_free_energy  # noqa: E402
+from ensemble_md.replica_exchange_EE import ReplicaExchangeEE  # noqa: E402
+from ensemble_md.utils.exceptions import ParameterError  # noqa: E402
 import os
 import sys
 import time
@@ -18,19 +26,12 @@ import natsort
 import argparse
 import warnings
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import rc
 from datetime import datetime
 from deeptime.markov.tools.analysis import is_transition_matrix
+import pandas as pd
 warnings.simplefilter(action='ignore', category=UserWarning)
-from ensemble_md.utils import utils  # noqa: E402
-from ensemble_md.analysis import analyze_traj  # noqa: E402
-from ensemble_md.analysis import analyze_matrix  # noqa: E402
-from ensemble_md.analysis import msm_analysis  # noqa: E402
-from ensemble_md.analysis import analyze_free_energy  # noqa: E402
-from ensemble_md.replica_exchange_EE import ReplicaExchangeEE  # noqa: E402
-from ensemble_md.utils.exceptions import ParameterError  # noqa: E402
 
 
 def initialize(args):
@@ -141,9 +142,8 @@ def main():
     np.save(f'{args.dir}/reps_transmtx_allconfigs.npy', reps_mtx)
     analyze_matrix.plot_matrix(reps_mtx, f'{args.dir}/rep_transmtx_allconfigs.png')
 
-    # Discontinuous trajectories with MT-REXEE are not yet supported
-    if REXEE.modify_coords is False:
-        # 1-3. Calculate the spectral gap for the replica-space transition amtrix
+    # 1-3. Calculate the spectral gap for the replica-space transition amtrix
+    if REXEE.modify_coords is None:  # Causes issues for non-continuous MT-REXEE trajectories
         print('1-3. Calculating the spectral gap of the replica-space transition matrix ...')
         spectral_gap, spectral_gap_err, eig_vals = analyze_matrix.calc_spectral_gap(reps_mtx)
         print(f'The spectral gap of the replica-space transition matrix: {spectral_gap:.3f}')
@@ -232,9 +232,8 @@ def main():
             print(f'   - Trajectory {i}: {spectral_gaps[i]:.3f} (λ_1: {eig_vals[i][0]:.5f}, λ_2: {eig_vals[i][1]:.5f})')  # noqa: E501
         print(f'   - Average of the above: {np.mean(spectral_gaps):.3f} (std: {np.std(spectral_gaps, ddof=1):.3f})')
 
-    # Discontinuous trajectories with MT-REXEE are not yet supported
-    if REXEE.modify_coords is False:
-        # 2-9. For each trajectory, calculate the stationary distribution from the overall transition matrix obtained in step 2-2.  # noqa: E501
+    # 2-9. For each trajectory, calculate the stationary distribution from the overall transition matrix obtained in step 2-2.  # noqa: E501
+    if REXEE.modify_coords is None:  # Causes issues for non-continuous MT-REXEE trajectories
         print('\n2-9. Calculating the stationary distributions ...')
         pi_list = [analyze_matrix.calc_equil_prob(mtx) for mtx in mtx_list]
         if any([x is None for x in pi_list]):
@@ -463,6 +462,7 @@ def main():
 
         else:  # MT-REXEE means each simulation is a seperate transformation
             fe_est, fe_err, trans = [], [], []
+            fe_est, fe_err, trans = [], [], []
             for sim in range(REXEE.n_sim):
                 print(f'Computing Free Energy for Simulation {sim}')
                 # 4-1. Subsampling the data
@@ -504,7 +504,11 @@ def main():
         section_idx += 1
         print(f'\n[ Section {section_idx}. Create end-state trajecotries for each simulation')
 
+        l0, l1, ps_per_frame = gmx_parser.get_end_states(f'{REXEE.working_dir}/sim_0/iteration_0/expanded.mdp')
         n_sim, n_iter = np.shape(rep_trajs)
+        if REXEE.swap_rep_pattern is None:
+            raise Exception('MT-REXEE trajectory analysis requires swap_rep_pattern to be defined')
+        analyze_traj.end_states_only_traj(REXEE.working_dir, n_sim, n_iter, l0, l1, REXEE.swap_rep_pattern, ps_per_frame)  # noqa: E501
 
         # Section 5.2. Create concatenated trajectories for each individual simulation
         print('5.2. Create concatenated trajectories for each individual simulation')
@@ -520,8 +524,8 @@ def main():
                 if i == 0:
                     for line in input_file:
                         output_file.write(line)
-                    traj_time = float(input_file[-1].split(' ')[0])
-                    time_step = np.round(traj_time - float(input_file[-2].split(' ')[0]), 4)
+                    time_value = float(input_file[-1].split(' ')[0])
+                    time_step = np.round(time_value - float(input_file[-2].split(' ')[0]), 4)
                 else:
                     skipped_first = False
                     for line in input_file:
@@ -529,9 +533,10 @@ def main():
                             if skipped_first is False:
                                 skipped_first = True
                             else:
-                                traj_time += time_step
-                                time_str = f'{traj_time:.4f}'
+                                time_value += time_step
+                                time_str = f'{time_value:.4f}'
                                 n = len(line.split(' ')[0])
+                                new_line = time_str + line[n:]
                                 new_line = time_str + line[n:]
                                 output_file.write(new_line)
             output_file.close()
@@ -541,4 +546,5 @@ def main():
     print(f'\nTotal wall time GROMACS spent to finish all iterations: {utils.format_time(t_wall_tot)}')
     print(f'Total time spent in syncrhonizing all replicas: {utils.format_time(t_sync)}')
 
+    print(f'\nTime spent on data analysis: {utils.format_time(time.time() - t0)}')
     print(f'\nTime spent on data analysis: {utils.format_time(time.time() - t0)}')
