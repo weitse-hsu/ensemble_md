@@ -15,10 +15,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import chain
 from matplotlib.ticker import MaxNLocator
-
 from alchemlyb.parsing.gmx import _get_headers as get_headers
 from alchemlyb.parsing.gmx import _extract_dataframe as extract_dataframe
 from ensemble_md.utils import utils
+import os
 
 
 def extract_state_traj(dhdl):
@@ -1351,116 +1351,6 @@ def get_delta_w_updates(log_file, plot=False):
     return t_updates, delta_w_updates, equil
 
 
-def end_states_only_traj(working_dir, n_sim, n_iter, l0_states, l1_states, swap_rep_pattern, ps_per_frame):
-    """
-    Create a trajectory which is a concatenation off all frames for each unique end state.
-
-    Parameters
-    ----------
-    working_dir : str
-        path for the current working directory
-    n_sim : int
-        the number of simulations run
-    n_iter : int
-        the number of iterations run
-    l0_states : list of int
-        the lambda states which correspond to lambda=0
-    l1_states : list of int
-        the lambda states which correspond to lambda=1
-    swap_rep_pattern : list of int
-        the replica swapping pattern which will indicate which end states are common
-    ps_per_frame : float
-        the timestep to convert the time in the GROMACS dh/dl file to frames in the trajecotry
-
-    Returns
-    -------
-    None
-    """
-    import pandas as pd
-    import os
-    import mdtraj as md
-
-    # Determine how many end states are present, which simulations and lambdas those end states correspond to
-    state_name = ['A']
-    considered_swaps = [[0, 0]]
-    cat = ord('A') + 1
-    for swap in swap_rep_pattern:
-        part_1, part_2 = swap
-        if part_1 in considered_swaps and part_2 in considered_swaps:
-            continue
-        elif part_1 in considered_swaps:
-            index = considered_swaps.index(part_1)
-            state_name.append(state_name[index])
-            considered_swaps.append(part_2)
-        elif part_2 in considered_swaps:
-            index = considered_swaps.index(part_2)
-            state_name.append(state_name[index])
-            considered_swaps.append(part_1)
-        else:
-            state_name.append(chr(cat))
-            state_name.append(chr(cat))
-            considered_swaps.append(part_1)
-            considered_swaps.append(part_2)
-            cat += 1
-    for i in range(n_sim):
-        for j in [0, 1]:
-            if [i, j] not in considered_swaps:
-                state_name.append(chr(cat))
-                considered_swaps.append([i, j])
-                cat += 1
-
-    # Determine which frames correspond to which end states
-    state_frame_df = pd.DataFrame()
-    for n in range(n_sim):
-        for i in range(n_iter):
-            l0_frame, l1_frame = [], []
-            dhdl_file = open(f'{working_dir}/sim_{n}/iteration_{i}/dhdl.xvg', 'r').readlines()
-            start = True
-            for line in dhdl_file:
-                split_line = line.split(' ')
-                while '' in split_line:
-                    split_line.remove('')
-                if '#' not in split_line[0] and '@' not in split_line[0]:
-                    time = float(split_line[0])
-                    if start:
-                        start_time = time
-                        start = False
-                    state = float(split_line[1])
-                    if time % ps_per_frame == 0:
-                        if state in l0_states:
-                            l0_frame.append(int((time-start_time)/ps_per_frame))
-                        elif state in l1_states:
-                            l1_frame.append(int((time-start_time)/ps_per_frame))
-            if len(l0_frame) != 0:
-                df_0 = pd.DataFrame({'Sim': n, 'Iteration': i, 'Frame': l0_frame, 'Lambda': 0})
-                state_frame_df = pd.concat([state_frame_df, df_0])
-            if len(l1_frame) != 0:
-                df_1 = pd.DataFrame({'Sim': n, 'Iteration': i, 'Frame': l1_frame, 'Lambda': 1})
-                state_frame_df = pd.concat([state_frame_df, df_1])
-
-    # Concatenate all frames from each set of trajectories for each end state
-    unique_states = list(set(state_name))
-    for state in unique_states:
-        indices = [i for i, value in enumerate(state_name) if value == state]
-        for i, index in enumerate(indices):
-            rep, lambda_rep = considered_swaps[index]
-            started = False
-            if os.path.exists(f'{working_dir}/sim_{rep}/iteration_0/confout_backup.gro'):
-                name = 'confout_backup'
-            else:
-                name = 'confout'
-            for iteration in range(n_iter):
-                frames_select = state_frame_df[(state_frame_df['Sim'] == rep) & (state_frame_df['Iteration'] == iteration) & (state_frame_df['Lambda'] == lambda_rep)]['Frame'].to_numpy()  # noqa: E501
-                if len(frames_select) != 0:
-                    if not started:
-                        traj = md.load(f'{working_dir}/sim_{rep}/iteration_{iteration}/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')  # noqa: E501
-                        started = True
-                    else:
-                        traj_add = md.load(f'{working_dir}/sim_{rep}/iteration_{iteration}/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')  # noqa: E501
-                        traj = md.join(traj, traj_add)
-            traj.save_xtc(f'{working_dir}/analysis/{state}_{rep}.xtc')
-
-
 def concat_sim_traj(working_dir, n_sim, n_iter, gro):
     """
     Create a trajectory which is a concatenation off each iterations trajectory
@@ -1482,8 +1372,12 @@ def concat_sim_traj(working_dir, n_sim, n_iter, gro):
     import os
     from tqdm import tqdm
 
+    # Create output directory if needed
+    if not os.path.exists(f'{working_dir}/analysis/traj'):
+        os.makedirs(f'{working_dir}/analysis/traj')
+
     for rep in range(n_sim):
-        if not os.path.exists(f'{working_dir}/analysis/sim{rep}_concat.xtc'):
+        if not os.path.exists(f'{working_dir}/analysis/traj/sim{rep}_concat.xtc'):
             if os.path.exists(f'{working_dir}/sim_{rep}/iteration_0/confout_backup.gro'):
                 name = 'confout_backup'
             else:
@@ -1495,4 +1389,33 @@ def concat_sim_traj(working_dir, n_sim, n_iter, gro):
                 traj_add = md.load(f'{working_dir}/sim_{rep}/iteration_{iteration}/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')  # noqa: E501
                 traj_add.superpose(gro_ref, frame=0)
                 traj = md.join([traj, traj_add[1:]])
-            traj.save_xtc(f'{working_dir}/analysis/sim{rep}_concat.xtc')
+            print(traj)
+            traj.save_xtc(f'{working_dir}/analysis/traj/sim{rep}_concat.xtc')
+
+
+def concat_xvg(n_sim, n_iter, working_dir):
+    for s in range(n_sim):
+        if os.path.exists(f'{working_dir}/analysis/sim_{s}.xvg'):
+            continue
+        output_file = open(f'{working_dir}/analysis/sim_{s}.xvg', 'w')
+        for i in range(n_iter):
+            input_file = open(f'{working_dir}/sim_{s}/iteration_{i}/dhdl.xvg').readlines()
+            if i == 0:
+                for line in input_file:
+                    output_file.write(line)
+                time_value = float(input_file[-1].split(' ')[0])
+                time_step = np.round(time_value - float(input_file[-2].split(' ')[0]), 4)
+            else:
+                skipped_first = False
+                for line in input_file:
+                    if line[0] != '#' and line[0] != '@':
+                        if skipped_first is False:
+                            skipped_first = True
+                        else:
+                            time_value += time_step
+                            time_str = f'{time_value:.4f}'
+                            n = len(line.split(' ')[0])
+                            new_line = time_str + line[n:]
+                            new_line = time_str + line[n:]
+                            output_file.write(new_line)
+        output_file.close()

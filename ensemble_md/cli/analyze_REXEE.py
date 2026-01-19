@@ -8,7 +8,6 @@
 #                                                                  #
 ####################################################################
 from ensemble_md.utils import utils  # noqa: E402
-from ensemble_md.utils import gmx_parser  # noqa: E402
 from ensemble_md.analysis import analyze_traj  # noqa: E402
 from ensemble_md.analysis import analyze_matrix  # noqa: E402
 from ensemble_md.analysis import msm_analysis  # noqa: E402
@@ -504,42 +503,14 @@ def main():
         section_idx += 1
         print(f'\n[ Section {section_idx}. Create end-state trajecotries for each simulation')
 
-        l0, l1, ps_per_frame = gmx_parser.get_end_states(f'{REXEE.working_dir}/sim_0/iteration_0/expanded.mdp')
         n_sim, n_iter = np.shape(rep_trajs)
-        if REXEE.swap_rep_pattern is None:
-            raise Exception('MT-REXEE trajectory analysis requires swap_rep_pattern to be defined')
-        analyze_traj.end_states_only_traj(REXEE.working_dir, n_sim, n_iter, l0, l1, REXEE.swap_rep_pattern, ps_per_frame)  # noqa: E501
 
         # Section 5.2. Create concatenated trajectories for each individual simulation
         print('5.2. Create concatenated trajectories for each individual simulation')
         analyze_traj.concat_sim_traj(REXEE.working_dir, n_sim, n_iter, REXEE.gro)
 
         print('5.3. Concatenate dhdl files')
-        for s in range(n_sim):
-            if os.path.exists(f'{args.dir}/sim_{s}.xvg'):
-                continue
-            output_file = open(f'{args.dir}/sim_{s}.xvg', 'w')
-            for i in range(n_iter):
-                input_file = open(f'{REXEE.working_dir}/sim_{s}/iteration_{i}/dhdl.xvg').readlines()
-                if i == 0:
-                    for line in input_file:
-                        output_file.write(line)
-                    time_value = float(input_file[-1].split(' ')[0])
-                    time_step = np.round(time_value - float(input_file[-2].split(' ')[0]), 4)
-                else:
-                    skipped_first = False
-                    for line in input_file:
-                        if line[0] != '#' and line[0] != '@':
-                            if skipped_first is False:
-                                skipped_first = True
-                            else:
-                                time_value += time_step
-                                time_str = f'{time_value:.4f}'
-                                n = len(line.split(' ')[0])
-                                new_line = time_str + line[n:]
-                                new_line = time_str + line[n:]
-                                output_file.write(new_line)
-            output_file.close()
+        analyze_traj.concat_xvg(n_sim, n_iter, REXEE.working_dir)
 
     # Section 6. Calculate the time spent in GROMACS (This could take a while.)
     t_wall_tot, t_sync, _ = utils.analyze_REXEE_time()
