@@ -335,14 +335,18 @@ def compare_MDPs(mdp_list, print_diff=False):
                     # the parameter is not in all MDP files
                     diff_params[p] = [d[p] if p in d else None for d in params_dicts]
                 else:
-                    # the parameter is in all MDP files (Note that "set([1, 1, 1]={1}.)")
-                    if isinstance(params_dicts[0][p], list):
-                        # the parameter is a list, which is unhashable
-                        if len(set([tuple(d[p]) for d in params_dicts])) > 1:
-                            diff_params[p] = [d[p] for d in params_dicts]
+                    if type(params_dicts[0][p]) is not type(params_dicts[1][p]):
+                        # e.g., tau_t = 1.0 1.0 1.0 v.s. tau_t = 1.0 (list v.s. float)
+                        diff_params[p] = [d[p] for d in params_dicts]
                     else:
-                        if len(set([d[p] for d in params_dicts])) > 1:
-                            diff_params[p] = [d[p] for d in params_dicts]
+                        # the parameter is in all MDP files (Note that "set([1, 1, 1]={1}.)")
+                        if isinstance(params_dicts[0][p], list):
+                            # the parameter is a list, which is unhashable
+                            if len(set([tuple(d[p]) for d in params_dicts])) > 1:
+                                diff_params[p] = [d[p] for d in params_dicts]
+                        else:
+                            if len(set([d[p] for d in params_dicts])) > 1:
+                                diff_params[p] = [d[p] for d in params_dicts]
 
     if print_diff:
         print("The following parameters are different among the MDP files:")
