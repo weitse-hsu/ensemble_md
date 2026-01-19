@@ -1006,6 +1006,7 @@ class Test_ReplicaExchangeEE:
                      f'{input_path}/coord_swap/E-F.gro']
         REXEE.resname_list = ['A2B', 'B2C', 'C2D', 'D2E', 'E2F']
         REXEE.swap_rep_pattern = [[[0, 1], [1, 0]], [[1, 1], [2, 0]], [[2, 1], [3, 0]], [[3, 1], [4, 0]]]
+        REXEE.allow_virtual_V = True
         REXEE.top = [f'{input_path}/coord_swap/A-B.top',
                      f'{input_path}/coord_swap/B-C.top',
                      f'{input_path}/coord_swap/C-D.top',
