@@ -1242,7 +1242,7 @@ def _read_gro(side, resname_list, gro_list):
     return name, num
 
 
-def create_atom_map(gro_list, resname_list, swap_patterns):
+def create_atom_map(gro_list, resname_list, swap_patterns, allow_virtual_V=True):
     """
     If you generate your hybrid topologies in a way that the
     same atom has the same name in each molecule then this
@@ -1287,6 +1287,7 @@ def create_atom_map(gro_list, resname_list, swap_patterns):
                 nb = nameB.index(f'D{element}{num}')
                 atomnameB.append(f'D{element}{num}')
                 atomidB.append(numB[nb])
+            
 
         df = pd.DataFrame({'resname A': resname_list[swap_pattern[0][0]], 'resname B': resname_list[swap_pattern[1][0]], 'atomid A': atomidA, 'atom name A': atomnameA, 'atomid B': atomidB, 'atom name B': atomnameB})  # noqa: E501
         output_df = pd.concat([output_df, df])
