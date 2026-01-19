@@ -1252,7 +1252,7 @@ def _read_gro(side, resname_list, gro_list):
     return name, num
 
 
-def create_atom_map(gro_list, resname_list, swap_patterns, allow_virtual_V=False):
+def create_atom_map(gro_list, resname_list, swap_patterns, allow_virtual_V=True):
     """
     If you generate your hybrid topologies in a way that the
     same atom has the same name in each molecule then this
