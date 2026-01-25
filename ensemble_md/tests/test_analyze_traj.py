@@ -13,6 +13,7 @@ Unit tests for the module analyze_traj.py.
 import os
 import pytest
 import numpy as np
+import mdtraj as md
 from unittest.mock import patch, call, MagicMock
 from ensemble_md.analysis import analyze_traj
 
@@ -595,7 +596,7 @@ def test_plot_state_hist(mock_plt):
     }
 
     # Clean up
-    os.remove('hist_data.npy')
+    os.remove('ensemble_md/tests/data/hist_data.npy')
 
 
 def test_calc_hist_rmse():
@@ -1119,3 +1120,29 @@ def test_get_delta_w_updates(mock_plt):
     assert mock_plt.text.call_args_list[0][0] == (0.65, 0.95, 'init_wl_delta: 0.4')
     assert mock_plt.text.call_args_list[1][0] == (0.65, 0.9, 'wl_scale: 0.8')
     assert mock_plt.text.call_args_list[2][0] == (0.65, 0.85, 'wl_delta_cutoff: 0.3')
+
+
+def test_concat_sim_traj():
+    base_dir = f'{input_path}/coord_swap/analysis'
+    analyze_traj.concat_sim_traj(base_dir, 2, 3, ['A-B.gro', 'B-C.gro'])
+    traj0 = md.load(f'{base_dir}/analysis/traj/sim0_concat.xtc', top=f'{base_dir}/A-B.gro')
+    assert traj0.n_frames == 4
+    assert traj0.n_atoms == 15
+    traj1 = md.load(f'{base_dir}/analysis/traj/sim1_concat.xtc', top=f'{base_dir}/B-C.gro')
+    assert traj1.n_frames == 4
+    assert traj1.n_atoms == 18
+    os.remove(f'{base_dir}/analysis/traj/sim0_concat.xtc')
+    os.remove(f'{base_dir}/analysis/traj/sim1_concat.xtc')
+    os.rmdir(f'{base_dir}/analysis/traj')
+
+
+def test_concat_xvg():
+    base_dir = f'{input_path}/coord_swap/analysis'
+    analyze_traj.concat_xvg(2, 3, base_dir)
+    test0 = open(f'{base_dir}/analysis/sim_0.xvg', 'r').readlines()
+    assert len(test0) == 189
+    test1 = open(f'{base_dir}/analysis/sim_1.xvg', 'r').readlines()
+    assert len(test1) == 189
+    os.remove(f'{base_dir}/analysis/sim_0.xvg')
+    os.remove(f'{base_dir}/analysis/sim_1.xvg')
+    os.rmdir(f'{base_dir}/analysis')

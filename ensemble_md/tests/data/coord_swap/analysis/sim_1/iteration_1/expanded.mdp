@@ -1,0 +1,78 @@
+; All  unspecified  parameters  adopt  their  own  defaults  values.
+
+; Preprocessing
+; title         = Production
+; Run parameters
+integrator = md-vv
+nsteps = 5000
+dt = 0.002
+; Output control
+nstenergy = 5000
+nstlog = 5000
+nstxout = 5000
+; Bond parameters
+continuation = no
+constraint_algorithm = lincs
+constraints = h-bonds
+lincs_iter = 2
+lincs_order = 4
+; Neighbor searching and vdW
+cutoff_scheme = Verlet
+ns_type = grid
+nstlist = 40
+rlist = 1.0
+vdwtype = cutoff
+vdw_modifier = Potential-switch
+rvdw_switch = 0.98
+rvdw = 1.0
+; Electrostatics
+coulombtype = PME
+rcoulomb = 1.0
+pme_order = 4
+fourierspacing = 0.12
+; Temperature coupling
+tcoupl = V-rescale
+tc_grps = System
+tau_t = 2.0
+ref_t = 300
+; Pressure coupling
+pcoupl = no
+refcoord_scaling = com
+; Periodic boundary conditions
+pbc = xyz
+; Dispersion correction is not used for proteins with the C36 additive FF
+DispCorr = EnerPres
+; Velocity generation
+gen_vel = yes
+gen_temp = 300
+gen_seed = -1
+
+; Free energy calculation
+free_energy = expanded
+calc_lambda_neighbors = -1
+sc_alpha = 0.3
+sc_coul = yes
+couple_lambda0 = vdw-q
+couple_lambda1 = vdw-q
+init_lambda_state = 4
+nstdhdl = 100
+dhdl_print_energy = total
+; Seed for Monte Carlo in lambda space
+lmc_seed = -1
+lmc_gibbsdelta = -1
+lmc_forced_nstart = 0
+symmetrized_transition_matrix = no
+nst_transition_matrix = 100000
+; expanded ensemble variables
+nstexpanded = 100
+nstcalcenergy = 100
+lmc_stats = no
+lmc_move = metropolized-gibbs
+; Free energy calculation
+init_lambda_weights = 0.0 -0.05401 0.04396 0.33371 0.82688 1.23892 1.89354 1.83736 1.85084
+coul_lambdas = 0.0 0.0 0.0 0.35 0.6 0.8 1.0 1.0 1.0
+vdw_lambdas = 0.0 0.0 0.0 0.35 0.6 0.8 1.0 1.0 1.0
+bonded_lambdas = 0.0 0.0 0.0 0.35 0.6 0.8 1.0 1.0 1.0
+
+tinit = 10.0
+init_histogram_counts = 5 4 5 5 7 5 4 6 8
