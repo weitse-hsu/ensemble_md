@@ -15,10 +15,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import chain
 from matplotlib.ticker import MaxNLocator
-
 from alchemlyb.parsing.gmx import _get_headers as get_headers
 from alchemlyb.parsing.gmx import _extract_dataframe as extract_dataframe
 from ensemble_md.utils import utils
+import os
 
 
 def extract_state_traj(dhdl):
@@ -106,6 +106,7 @@ def stitch_time_series(files, rep_trajs, shifts=None, dhdl=True, col_idx=-1, sav
     # files_sorted[i] contains the dhdl/plumed output files for starting configuration i sorted
     # based on iteration indices
     files_sorted = [[] for i in range(n_configs)]
+    print(n_iter)
     for i in range(n_configs):
         for j in range(n_iter):
             files_sorted[i].append(files[rep_trajs[i][j]][j])
@@ -539,7 +540,15 @@ def plot_state_hist(trajs, state_ranges, fig_name, stack=True, figsize=None, pre
         hist, bins = np.histogram(traj, bins=np.arange(lower_bound, upper_bound + 1, 1))
         hist_data.append(hist)
     if save_hist is True:
-        np.save('hist_data.npy', hist_data)
+        if len(fig_name.split('/')) > 1:
+            dir_list = []
+            for i in fig_name.split('/')[:-1]:
+                dir_list.append(i)
+                dir_list.append('/')
+            dir_path = ''.join(dir_list)
+            np.save(f'{dir_path}/hist_data.npy', hist_data)
+        else:
+            np.save('hist_data.npy', hist_data)
 
     # Use the same bins for all histograms
     bins = bins[:-1]  # Remove the last bin edge because there are n+1 bin edges for n bins
@@ -685,6 +694,8 @@ def plot_transit_time(trajs, N, fig_prefix=None, dt=None, folder='.'):
     units : str
         The units of the time.
     """
+    import pandas as pd
+
     if dt is None:
         x = np.arange(len(trajs[0]))
         units = 'step'
@@ -824,6 +835,14 @@ def plot_transit_time(trajs, N, fig_prefix=None, dt=None, folder='.'):
                     plt.savefig(f'{folder}/hist_{fig_names[t]}', dpi=600)
                 else:
                     plt.savefig(f'{folder}/{fig_prefix}_hist_{fig_names[t]}', dpi=600)
+    # Save to csv
+    sim_list, rt_list = [], []
+    for n in range(len(t_roundtrip_list)):
+        for rt in t_roundtrip_list[n]:
+            sim_list.append(n)
+            rt_list.append(rt)
+    df_rt = pd.DataFrame({'Sim': sim_list, 'Round Trip Time': rt_list})
+    df_rt.to_csv(f'{folder}/roundtrip_times.csv')
 
     return t_0k_list, t_k0_list, t_roundtrip_list, units
 
@@ -1330,3 +1349,73 @@ def get_delta_w_updates(log_file, plot=False):
         plt.savefig('delta_w_updates.png', dpi=600)
 
     return t_updates, delta_w_updates, equil
+
+
+def concat_sim_traj(working_dir, n_sim, n_iter, gro):
+    """
+    Create a trajectory which is a concatenation off each iterations trajectory
+
+    Parameters
+    ----------
+    working_dir : str
+        path for the current working directory
+    n_sim : int
+        the number of simulations run
+    n_iter : int
+        the number of iterations run
+
+    Returns
+    -------
+    None
+    """
+    import mdtraj as md
+    import os
+    from tqdm import tqdm
+
+    # Create output directory if needed
+    if not os.path.exists(f'{working_dir}/analysis/traj'):
+        os.makedirs(f'{working_dir}/analysis/traj')
+
+    for rep in range(n_sim):
+        if not os.path.exists(f'{working_dir}/analysis/traj/sim{rep}_concat.xtc'):
+            if os.path.exists(f'{working_dir}/sim_{rep}/iteration_0/confout_backup.gro'):
+                name = 'confout_backup'
+            else:
+                name = 'confout'
+            gro_ref = md.load(f'{working_dir}/{gro[rep]}')
+            traj = md.load(f'{working_dir}/sim_{rep}/iteration_0/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')  # noqa: E501
+            traj.superpose(gro_ref, frame=0)
+            for iteration in tqdm(range(1, n_iter)):
+                traj_add = md.load(f'{working_dir}/sim_{rep}/iteration_{iteration}/traj.trr', top=f'{working_dir}/sim_{rep}/iteration_0/{name}.gro')  # noqa: E501
+                traj_add.superpose(gro_ref, frame=0)
+                traj = md.join([traj, traj_add[1:]])
+            print(traj)
+            traj.save_xtc(f'{working_dir}/analysis/traj/sim{rep}_concat.xtc')
+
+
+def concat_xvg(n_sim, n_iter, working_dir):
+    for s in range(n_sim):
+        if os.path.exists(f'{working_dir}/analysis/sim_{s}.xvg'):
+            continue
+        output_file = open(f'{working_dir}/analysis/sim_{s}.xvg', 'w')
+        for i in range(n_iter):
+            input_file = open(f'{working_dir}/sim_{s}/iteration_{i}/dhdl.xvg').readlines()
+            if i == 0:
+                for line in input_file:
+                    output_file.write(line)
+                time_value = float(input_file[-1].split(' ')[0])
+                time_step = np.round(time_value - float(input_file[-2].split(' ')[0]), 4)
+            else:
+                skipped_first = False
+                for line in input_file:
+                    if line[0] != '#' and line[0] != '@':
+                        if skipped_first is False:
+                            skipped_first = True
+                        else:
+                            time_value += time_step
+                            time_str = f'{time_value:.4f}'
+                            n = len(line.split(' ')[0])
+                            new_line = time_str + line[n:]
+                            new_line = time_str + line[n:]
+                            output_file.write(new_line)
+        output_file.close()

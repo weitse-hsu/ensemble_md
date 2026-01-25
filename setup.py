@@ -93,6 +93,7 @@ setup(
         'seaborn',
         'matplotlib<=3.8.4',
         'pyemma',
+        'openmpi',
         'mpi4py',
         'ruptures'
     ],
