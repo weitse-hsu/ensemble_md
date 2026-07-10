@@ -182,7 +182,7 @@ texinfo_documents = [
 # autoclass_content = 'both'
 autodoc_member_order = 'bysource'
 napoleon_attr_annotations = True
-autodoc_mock_imports = ["mpi4py"]  # we originally included gmxapi in the old versions of ensemble_md
+autodoc_mock_imports = ["mpi4py", "pyemma", "deeptime", "mdtraj"]  # we originally included gmxapi in the old versions of ensemble_md; pyemma/deeptime/mdtraj have no prebuilt wheels and fail to compile on RTD, so they're mocked instead of installed
 
 # -- Others ------------------------------------------------------------------
 autodoc_default_options = {

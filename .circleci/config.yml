@@ -69,6 +69,7 @@ jobs:
             # sleep 3000  # only for debugging purposes
             
             coverage run -m pytest -vv --disable-pytest-warnings --color=yes ensemble_md/tests
+            coverage xml
             # mpirun -np 4 coverage run --rcfile setup.cfg -m pytest ensemble_md/tests/test_mpi_func.py --with-mpi -vv --disable-pytest-warnings --color=yes  # this will generate multiple .coverage* files that can be combined
             # coverage combine  # This will combine multiple .coverage* files into a single .coverage file that will be uploaded and reported.
 
@@ -80,7 +81,10 @@ jobs:
       - run:
           name: CodeCov
           command: |
-            bash <(curl -s https://codecov.io/bash)
+            curl -Os https://cli.codecov.io/latest/linux/codecov
+            chmod +x codecov
+            ./codecov --verbose upload-process --disable-search --fail-on-error \
+              -t "${CODECOV_TOKEN}" -n "circleci-${CIRCLE_BUILD_NUM}" -f coverage.xml
 
       - store_test_results:
           path: test-results
