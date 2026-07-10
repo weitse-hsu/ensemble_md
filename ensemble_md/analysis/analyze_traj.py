@@ -1313,6 +1313,7 @@ def get_delta_w_updates(log_file, plot=False):
 
     # Start parsing the data
     n = -1
+    equil = False
     t_updates, delta_w_updates = [0], [init_wl_delta]
     for l in lines:  # noqa: E741
         n += 1
@@ -1394,6 +1395,9 @@ def concat_sim_traj(working_dir, n_sim, n_iter, gro):
 
 
 def concat_xvg(n_sim, n_iter, working_dir):
+    if not os.path.exists(f'{working_dir}/analysis'):
+        os.makedirs(f'{working_dir}/analysis')
+
     for s in range(n_sim):
         if os.path.exists(f'{working_dir}/analysis/sim_{s}.xvg'):
             continue

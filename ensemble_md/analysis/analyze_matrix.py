@@ -120,8 +120,12 @@ def calc_equil_prob(trans_mtx):
         return None
 
     # The eigenvector corresponding to the eigenvalue eig_vals[i] is eig_vecs[:, i]
-    close_to_1_idx = np.isclose(eig_vals, 1, atol=1e-4)
-    equil_prob = eig_vecs[:, close_to_1_idx]  # note that this is normalized
+    # Note that we pick a single eigenvector (the one whose eigenvalue is closest to 1) instead of
+    # a boolean mask over all eigenvalues close to 1, since poorly-sampled/near-reducible matrices
+    # can have more than one eigenvalue within the tolerance, which would otherwise select multiple
+    # eigenvectors and make the subsequent normalization/real-part extraction ill-defined.
+    close_to_1_idx = np.argmin(np.abs(eig_vals - 1))
+    equil_prob = eig_vecs[:, [close_to_1_idx]]  # note that this is normalized; kept 2D (like the old boolean-mask indexing) for backward compatibility  # noqa: E501
     equil_prob /= np.sum(equil_prob)   # So the sum of all components is 1
     equil_prob = np.array([i.real for i in equil_prob if i.imag == 0])  # get rid of the imaginary part if it is 0
     return equil_prob

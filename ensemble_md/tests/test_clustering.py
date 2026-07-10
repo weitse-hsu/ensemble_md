@@ -183,7 +183,7 @@ def test_analyze_transitions(mock_plt):
     }
     results = clustering.analyze_transitions(clusters)
     assert results[0] == np.array([[1]])
-    assert (results[1] == np.ones(len(clusters[1]))).all
+    assert (results[1] == np.ones(len(clusters[1]))).all()
     assert results[2] == {}
 
     # Test 2: More transitions

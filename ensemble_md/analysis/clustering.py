@@ -100,6 +100,8 @@ def cluster_traj(gmx_executable, inputs, grps, coupled_only=True, method='linkag
             '-o', 'index.ndx',
         ]
         returncode, stdout, stderr = run_gmx_cmd(args, prompt_input='q\n')
+        if returncode != 0:
+            raise ValueError(f'Error with return code {returncode}:\n{stderr}')
         inputs['index'] = 'index.ndx'
 
     # Check if the groups are present in the index file
@@ -247,6 +249,8 @@ def get_cluster_info(cluster_log):
     f.close()
 
     rmsd_range = []
+    rmsd_avg = None
+    n_clusters = None
     for line in lines:
         if 'The RMSD ranges from' in line:
             rmsd_range.append(float(line.split('from')[-1].split('to')[0]))

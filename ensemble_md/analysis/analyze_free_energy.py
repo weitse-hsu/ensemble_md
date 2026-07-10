@@ -488,6 +488,7 @@ def average_weights(g_vecs, frac):
     n = int(np.floor(N * frac))
     if n <= 1:
         print('The number of samples to be averaged is less than 2, so all samples will be averaged.')
+        n = N
     dg_avg = np.mean(dg[-n:])
     dg_avg_err = np.std(dg[-n:], ddof=1)
 

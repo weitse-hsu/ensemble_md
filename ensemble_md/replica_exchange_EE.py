@@ -1297,7 +1297,7 @@ class ReplicaExchangeEE:
                 print(f'  Original weights of rep {i}:\t{[float(f"{k:.3f}") for k in weights[i]]}')
 
             for j in range(1, len(weights[i])):  # loop over the alchemical states
-                if counts[i][j - 1] != 0 and counts[i][j - 1] != 0:
+                if counts[i][j - 1] != 0 and counts[i][j] != 0:
                     if np.min([counts[i][j - 1], counts[i][j]]) > self.N_cutoff:
                         weights[i][j] += np.log(counts[i][j - 1] / counts[i][j])
                     else:

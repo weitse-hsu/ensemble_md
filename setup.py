@@ -95,7 +95,8 @@ setup(
         'pyemma',
         'openmpi',
         'mpi4py',
-        'ruptures'
+        'ruptures',
+        'tqdm'
     ],
 
     # (OBSOLETE) The following extra_require directive provides optional dependencies by, in our case, pip install ensemble[gmxapi].
