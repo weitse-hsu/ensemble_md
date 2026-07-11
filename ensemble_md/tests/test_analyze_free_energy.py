@@ -242,6 +242,40 @@ def test_calculate_free_energy(mock_calc, mock_combine, mock_apply):
         analyze_free_energy.calculate_free_energy(mock_data, state_ranges, "MBAR", err_method="XYZ")
 
 
+@patch('ensemble_md.analysis.analyze_free_energy._apply_estimators')
+@patch('ensemble_md.analysis.analyze_free_energy._calculate_df')
+def test_calculate_free_energy_mtrexee(mock_calc_df, mock_apply):
+    # MTREXEE mode takes a different code path than the standard REXEE tests above: state_ranges
+    # is a flat list (not a list of lists), df/df_err come from _calculate_df (not
+    # _calculate_df_adjacent + _combine_df_adjacent), and the final f/f_err are just df/df_err
+    # directly (no leading-zero insert or cumulative sum).
+    state_ranges = [0, 1, 2]  # n_tot = state_ranges[-1] + 1 = 3
+    mock_data = [MagicMock()]
+    mock_estimators = [MagicMock()]
+    mock_apply.return_value = mock_estimators
+    mock_calc_df.return_value = ([1.0, 2.0], [0.1, 0.15])
+    for data in mock_data:
+        data.sample.return_value = data
+
+    # Test 1: err_method == "propagate"
+    results = analyze_free_energy.calculate_free_energy(mock_data, state_ranges, "MBAR", err_method="propagate", MTREXEE=True)  # noqa: E501
+    assert results[0] == [1.0, 2.0]
+    assert results[1] == [0.1, 0.15]
+    assert results[2] == mock_estimators
+    mock_calc_df.assert_called_once_with(mock_estimators)
+
+    # Test 2: err_method == "bootstrap". Also exercises the "MTREXEE is True or overlap_bool[i]
+    # is True" check relying on short-circuit evaluation, since overlap_bool is never defined in
+    # the MTREXEE branch.
+    mock_calc_df.reset_mock()
+    mock_calc_df.return_value = ([1.0, 2.0], [0.1, 0.15])  # df/df_err are mutated by the previous test  # noqa: E501
+    results = analyze_free_energy.calculate_free_energy(mock_data, state_ranges, "MBAR", err_method="bootstrap", n_bootstrap=5, seed=0, MTREXEE=True)  # noqa: E501
+    # Since all bootstrap iterations are the same, error_bootstrap should be [0, 0]
+    assert results[0] == [1.0, 2.0]
+    assert results[1] == [0, 0]
+    assert results[2] == mock_estimators
+
+
 def test_calculate_df_rmse():
     # Mock estimators setup
     estimator1 = MagicMock()

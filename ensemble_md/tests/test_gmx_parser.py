@@ -23,6 +23,13 @@ current_path = os.path.dirname(os.path.abspath(__file__))
 input_path = os.path.join(current_path, "data")
 
 
+def test_parse_mc_lambda_row_no_count_column():
+    # A row with fewer than 2 integer-looking tokens (i.e. no row index + Count pair) should
+    # raise a clear ParseError instead of silently misidentifying some other column as Count.
+    with pytest.raises(ParseError, match="could not identify the 'Count' column"):
+        gmx_parser._parse_mc_lambda_row(['0.000', '0.250', '1.234'])
+
+
 def test_parse_log():
     # Case 1: weight-updating simulation
     weights_0, counts_0, wl_delta_0, equil_time_0 = gmx_parser.parse_log(os.path.join(input_path, 'log/EXE_0.log'))

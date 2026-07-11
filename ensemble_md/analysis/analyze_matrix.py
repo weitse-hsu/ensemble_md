@@ -171,7 +171,10 @@ def calc_spectral_gap(trans_mtx, atol=1e-8, n_bootstrap=50, seed=None):
         return None
 
     eig_vals = np.sort(eig_vals)[::-1]  # descending order
-    if np.isclose(eig_vals[0], 1, atol=1e-4) is False:
+    # Note: np.isclose(...) returns a numpy.bool_, which is never Python's False by identity, so
+    # "is False" here was always False regardless of the actual result -- making this check dead
+    # code that could never raise. Use "not" instead, which works correctly on numpy.bool_.
+    if not np.isclose(eig_vals[0], 1, atol=1e-4):
         raise ParameterError(f'The largest eigenvalue of the input transition matrix {eig_vals[0]} is not close to 1.')
 
     spectral_gap = np.abs(eig_vals[0]) - np.abs(eig_vals[1])
