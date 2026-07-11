@@ -290,15 +290,6 @@ def plot_matrix(matrix, fig_name, title=None, start_idx=0):
     plt.figure(figsize=(K / 1.5, K / 1.5))     # or figsize=(K / 1.5, K / 1.5)
     annot_matrix = np.zeros([K, K])  # matrix for annotating values
 
-    mask = []
-    for i in range(K):
-        mask.append([])
-        for j in range(len(matrix[0])):
-            if matrix[i][j] < 0.005:
-                mask[-1].append(True)
-            else:
-                mask[-1].append(False)
-
     for i in range(K):
         for j in range(K):
             annot_matrix[i, j] = round(matrix[i, j], 2)

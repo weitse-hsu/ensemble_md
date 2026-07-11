@@ -74,25 +74,37 @@ def parse_log(log_file):
     f.close()
 
     case = None  # itialized as None and should end up as 1 or 2 or 3.
+    N_states, tinit, cutoff, dt = None, None, None, None
 
     # First parse the MD parameters to tell the type of the simulation.
+    # Note: we match on the exact (stripped) parameter name rather than checking whether it
+    # appears anywhere in the line (e.g. the old "dt  " in l or "n-lambdas" in l checks), since
+    # a raw substring match is fragile -- it can in principle also match other parameter names
+    # that happen to contain the same characters (e.g. "dt" is a substring of many longer,
+    # unrelated tokens), and it silently relies on exact whitespace padding that GROMACS is not
+    # guaranteed to preserve across versions.
     for l in lines:  # noqa: E741
-        if "n-lambdas" in l:
-            N_states = int(l.split("=")[1])
-        if "tinit" in l:
-            tinit = float(l.split("=")[1])
-        if "weight-equil-wl-delta" in l:
+        if "=" not in l:
+            continue
+        key, val = l.split("=", 1)
+        key = key.strip()
+        if key == "n-lambdas":
+            N_states = int(val)
+        elif key == "tinit":
+            tinit = float(val)
+        elif key == "weight-equil-wl-delta":
             # For Case 1 and Case 2
-            cutoff = float(l.split("=")[1])
-        if "lmc-stats" in l:
-            if l.split("=")[1].split()[0] in ["no", "No"]:  # Case 3
+            cutoff = float(val)
+        elif key == "lmc-stats":
+            if val.split()[0].lower() == "no":  # Case 3
                 case = '3'
                 equil_time = 0
                 wl_delta = None
-            else:
-                pass  # Either Case 1 or Case 2
-        if "dt  " in l:
-            dt = float(l.split("=")[1])
+        elif key == "dt":
+            dt = float(val)
+
+    if N_states is None:
+        raise ParseError(f"Failed to parse the log file '{log_file}': could not find the parameter 'n-lambdas'.")  # noqa: E501
 
     # For all cases, we need to find weights and counts
     weights = []
@@ -116,6 +128,9 @@ def parse_log(log_file):
                 weights.append(w)
                 break
     else:  # Case 1 and Case 2
+        if tinit is None or dt is None or cutoff is None:
+            raise ParseError(f"Failed to parse the log file '{log_file}': could not find 'tinit', 'dt', or 'weight-equil-wl-delta', which are required to parse a weight-updating simulation.")  # noqa: E501
+
         # Here we search from the top, since we need weights as a function of time anyway.
         n = -1
         find_equil, append_equil = False, False
@@ -319,34 +334,33 @@ def compare_MDPs(mdp_list, print_diff=False):
     {'wl_scale': [None, 0.8], ...}
     """
     diff_params = {}
-    for i in range(len(mdp_list)):
-        mdps = [MDP(mdp_list[i]) for i in range(len(mdp_list))]
-        params_dicts = [odict([(k.replace('-', '_'), v) if type(v) is not str else (k.replace('-', '_'), v.replace('-', '_')) for k, v in p.items()]) for p in mdps]  # noqa: E501
+    mdps = [MDP(mdp_file) for mdp_file in mdp_list]
+    params_dicts = [odict([(k.replace('-', '_'), v) if type(v) is not str else (k.replace('-', '_'), v.replace('-', '_')) for k, v in p.items()]) for p in mdps]  # noqa: E501
 
-        # First figure out the union set of the parameters and exclude blanks and comments
-        all_params = set([key for d in params_dicts for key in d.keys()])
-        all_params = [p for p in all_params if not p.startswith(('B', 'C'))]
+    # First figure out the union set of the parameters and exclude blanks and comments
+    all_params = set([key for d in params_dicts for key in d.keys()])
+    all_params = [p for p in all_params if not p.startswith(('B', 'C'))]
 
-        for p in all_params:
-            if p in diff_params:
-                pass  # already in the dictionary, no need to compare again
+    for p in all_params:
+        if p in diff_params:
+            pass  # already in the dictionary, no need to compare again
+        else:
+            if not all(p in d for d in params_dicts):
+                # the parameter is not in all MDP files
+                diff_params[p] = [d[p] if p in d else None for d in params_dicts]
             else:
-                if not all(p in d for d in params_dicts):
-                    # the parameter is not in all MDP files
-                    diff_params[p] = [d[p] if p in d else None for d in params_dicts]
+                if type(params_dicts[0][p]) is not type(params_dicts[1][p]):
+                    # e.g., tau_t = 1.0 1.0 1.0 v.s. tau_t = 1.0 (list v.s. float)
+                    diff_params[p] = [d[p] for d in params_dicts]
                 else:
-                    if type(params_dicts[0][p]) is not type(params_dicts[1][p]):
-                        # e.g., tau_t = 1.0 1.0 1.0 v.s. tau_t = 1.0 (list v.s. float)
-                        diff_params[p] = [d[p] for d in params_dicts]
+                    # the parameter is in all MDP files (Note that "set([1, 1, 1]={1}.)")
+                    if isinstance(params_dicts[0][p], list):
+                        # the parameter is a list, which is unhashable
+                        if len(set([tuple(d[p]) for d in params_dicts])) > 1:
+                            diff_params[p] = [d[p] for d in params_dicts]
                     else:
-                        # the parameter is in all MDP files (Note that "set([1, 1, 1]={1}.)")
-                        if isinstance(params_dicts[0][p], list):
-                            # the parameter is a list, which is unhashable
-                            if len(set([tuple(d[p]) for d in params_dicts])) > 1:
-                                diff_params[p] = [d[p] for d in params_dicts]
-                        else:
-                            if len(set([d[p] for d in params_dicts])) > 1:
-                                diff_params[p] = [d[p] for d in params_dicts]
+                        if len(set([d[p] for d in params_dicts])) > 1:
+                            diff_params[p] = [d[p] for d in params_dicts]
 
     if print_diff:
         print("The following parameters are different among the MDP files:")
