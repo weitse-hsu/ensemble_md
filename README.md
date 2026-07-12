@@ -2,7 +2,7 @@ Ensemble Molecular Dynamics
 ==============================
 [//]: # (Badges)
 [![weitse-hsu](https://circleci.com/gh/weitse-hsu/ensemble_md.svg?style=shield)](https://app.circleci.com/pipelines/github/weitse-hsu/ensemble_md?branch=master)
-[![codecov](https://codecov.io/gh/wehs7661/ensemble_md/branch/master/graph/badge.svg)](https://app.codecov.io/gh/wehs7661/ensemble_md/tree/master)
+[![codecov](https://codecov.io/gh/weitse-hsu/ensemble_md/graph/badge.svg?token=YyFkoC9nHS)](https://codecov.io/gh/weitse-hsu/ensemble_md)
 [![Documentation Status](https://readthedocs.org/projects/ensemble-md/badge/?version=latest)](https://ensemble-md.readthedocs.io/en/latest/?badge=latest)
 [![GitHub Actions Lint Status](https://github.com/wehs7661/ensemble_md/actions/workflows/lint.yaml/badge.svg)](https://github.com/wehs7661/ensemble_md/actions/workflows/lint.yaml)
 [![PyPI version](https://badge.fury.io/py/ensemble-md.svg)](https://badge.fury.io/py/ensemble-md)
