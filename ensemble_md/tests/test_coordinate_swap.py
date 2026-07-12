@@ -68,9 +68,10 @@ def test_fix_break():
 
     fixed_mol = md.load(f'{input_path}/coord_swap/fixed_mol.gro')
 
-    assert (test_fix.xyz == fixed_mol.xyz).all
-    assert (test_fix_3D.xyz == fixed_mol.xyz).all
-    assert (still_fixed.xyz == fixed_mol.xyz).all
+    # atol=1e-3 to account for the GRO format's 3-decimal-place coordinate precision
+    assert np.allclose(test_fix.xyz, fixed_mol.xyz, atol=1e-3)
+    assert np.allclose(test_fix_3D.xyz, fixed_mol.xyz, atol=1e-3)
+    assert np.allclose(still_fixed.xyz, fixed_mol.xyz, atol=1e-3)
 
 
 def test_perform_shift():
@@ -237,7 +238,7 @@ def test_rotate_point_around_axis():
     axis = np.array([0.15, 0.82, 0.14])
     angle = 0.13
     rotated_point = [0.1693233, 0.18548463, -0.0335421]
-    assert (coordinate_swap._rotate_point_around_axis(initial_point, vertex, axis, angle) == rotated_point).all
+    assert np.allclose(coordinate_swap._rotate_point_around_axis(initial_point, vertex, axis, angle), rotated_point)
 
 
 def test_find_rotation_angle():
@@ -347,5 +348,5 @@ def test_create_atom_map():
     atom_name_mapping_true = pd.read_csv(f'{input_path}/coord_swap/atom_name_mapping.csv')
     coordinate_swap.create_atom_map(gro, names, swap_pattern, True)
     atom_name_mapping_test = pd.read_csv('atom_name_mapping.csv')
-    assert (atom_name_mapping_true == atom_name_mapping_test).all
+    assert (atom_name_mapping_true == atom_name_mapping_test).all().all()
     os.remove('atom_name_mapping.csv')

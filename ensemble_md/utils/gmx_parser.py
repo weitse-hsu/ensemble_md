@@ -437,7 +437,9 @@ def read_top(file_name, resname):
             while '' in line_sep:
                 line_sep.remove('')
             itp_files.append(line_sep[-1].strip('\n""'))
-    file_dir, file_name = os.path.split(file_name)
+    # Note: we discard (not reassign to file_name) the basename from os.path.split so that the
+    # error message below reports the original path the caller passed in, not just the basename.
+    file_dir, _ = os.path.split(file_name)
     if file_dir == '':
         file_dir = '.'
     for file in itp_files:

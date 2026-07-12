@@ -395,7 +395,7 @@ def main():
         section_idx += 1
         print(f'\n[ Section {section_idx}. Free energy calculations ]')
 
-        if REXEE.modify_coords is False:
+        if REXEE.modify_coords is None:
             # 4-1. Subsampling the data
             data_list = []   # either a list of u_nk or a list of dhdl
             if REXEE.df_data_type == 'u_nk':

@@ -183,5 +183,9 @@ def test_read_top():
 
     wrong_resname = ['B2C', 'C2D', 'D2E']
     for resname, top_file in zip(wrong_resname, top_files):
-        with pytest.raises(Exception, match=f'Residue {resname} can not be found in {top_file}'):
-            gmx_parser.read_top(f'{input_path}/coord_swap/{top_file}', resname)
+        # The error message should report the full path passed in (not just the basename), so
+        # a user can tell exactly which file (out of possibly many same-named files in different
+        # directories) failed to parse.
+        full_path = f'{input_path}/coord_swap/{top_file}'
+        with pytest.raises(Exception, match=f'Residue {resname} can not be found in {re.escape(full_path)}'):
+            gmx_parser.read_top(full_path, resname)
