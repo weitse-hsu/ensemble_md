@@ -1,0 +1,9 @@
+# Set-up ensemble_md on Alpine Cluster
+name: REXEE
+dependencies:
+  - openmpi
+  - mpi4py
+  - python =3.11.*
+  - pip
+  - pip:
+    - -e .

@@ -46,15 +46,13 @@ def get_dimensions(file):
 
 def extract_missing(nameA, nameB, swap_map):
     """
-    Determine the atoms which are common, which are switched between dummy and real atoms,
-    and which are unique between the two input molecules.
+    Determine the atoms which are missing from the swap map and reformat into
+    pd.DataFrame object.
 
     Parameters  <---- CHANGE ME
     ----------
     molA_file : list
         A list of strings containing lines of the GRO file for molecule A.
-    molB_file : list
-        A list of strings containing lines of the GRO file for molecule B.
     nameA : str
         The name of the residue being altered in molecule A.
     nameB : str
@@ -275,11 +273,7 @@ def get_miss_coord(mol_align, mol_ref, name_align, name_ref, df_atom_swap, dir, 
         A pandas DataFrame that contains the following information for each at omthat is no in the common list:
 
           - The name of the atom
-          - The atom number
-          - The atom element
-          - Whether the atom is switchin between dummy and real or missing
           - The swap direction (same as input)
-          - Thether the final atom type is real or dummy
     dir : str
         The swapping direction.
     df_swap : pandas.DataFrame
@@ -794,16 +788,20 @@ def write_modified(df_atom_swap, swap, line_start, orig_file, new_file, atom_num
         List of strings containing the content of the pre-swap file to read from.
     new_file : file-like object
         Temporary file to write new coordinates.
+    atom_num_init : int
+        Atom number for the first atom to be written to the file.
     old_res_name : str
         Residue name from before the swap.
     new_res_name : str
         Residue name for after the swap.
     orig_coords : numpy.ndarray
         Coordinates for all atoms in the system before the swap.
-    miss : list
-        Residues which are needed after the swap which are not present before the swap.
+    atom_mapping : pd.DataFrame
+        Pandas df to map the names and number for identical atoms between the two molecules
     atom_order : list of str
         List of the atom names in the order they appear in the GRO file
+    old_atom_order : list of str
+        List of the atom names in the order they appear in the previous moleucle's GRO file
     """
     # Add vero velocity to all atoms
     vel = ['0.000', '0.000', '0.000\n']
@@ -1082,7 +1080,7 @@ def get_names(input, resname):
         The next line to start reading from the topology.
     atom_name : list
         All atom names in the topology corresponding to the residue of interest.
-    atom_num : list
+    atom_num : np.array
         The atom numbers corresponding to the atom names in atom_name
     state : list
         The state that the atom is a dummy atom (:math:`lambda=0`, :math:`lambda=1`, or -1 if nevver dummy).

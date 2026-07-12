@@ -29,6 +29,12 @@ paper [Hsu2024]_.
    of EE simulations are periodically exchanged. :math:`{\bf A}_1`, :math:`{\bf A}_2`, :math:`{\bf A}_3`, and :math:`{\bf A}_4`
    denote the sets of states different replicas are sampling.
 
+The REXEE architecture can easily lend itself to performing several alchemical transformations in the parallel simulation rather than decomposing
+the alchemical states between the parallel simulations as is utilized in the REXEE implementation. The mulitple topology replica exchange of expanded ensemble (MT-REXEE)
+method allows for parallel transformation with overlapping end steps to engage in conformational swaps to increase conformational sampling [Friedman2025]_. Any 
+transformation within the trsnformation network with a common end state can engage in conformational swap and increase conformational sampling. This method is 
+ideal for systems which have high free energy barriers present for only a subset of ligands to be evaluated.
+
 2. REXEE configuration
 ======================
 Here we consider a REXEE simulation composed of :math:`R` parallel replicas of expanded ensembles, each of which is
@@ -450,3 +456,23 @@ replaced by :math:`\Delta G^k_{(s, s+1)}`, the free energy difference computed b
 :math:`\sigma^k_{(s, s+1)}` used in Equations :eq:`eq_9` and :eq:`eq_10` should be the uncertainty associated with  :math:`\Delta G^k_{(s, s+1)}`
 calculated by the estimator. In :code:`ensemble_md`, this has been implemented in the function :func:`.calculate_free_energy` in :obj:`.analyze_free_energy`.
 
+7. MT-REXEE Coordinate Modification
+===================================
+The MT-REXEE method requires that coordinates for the non-matching dummy atoms between two transformations must be reconstructed in order to swap coordinates. 
+The default cordinate modification function provided within this package can be selected by adding :code:`modify_coords: default` to your input YAML file. 
+Alternatively, a custom function can be provided by the user. For this explanation we will be using the defualt function to perform a swap between a simulation 
+which features molecule A and a simulation which features molecule B. We first determine which atoms are missing between determines all atoms which are present 
+in molecule A but not in B and vice versa. By definition these atoms must be dummy atoms in their fully non-coupled state when the swap is performed. These 
+missing atoms are then broken up by functional group to create several missing R groups. The alignment is then performed individually for each missing R group 
+as shown in Figure ?. This will provide coordinates for the R groups unique to molecule B consistant with the structure of the common atoms in molecule A and vice 
+versa. This allows new GRO files to be written and the next iteration to be perfomed.
+
+.. figure:: _static/explain_swap_method.png
+   :name: Fig. 3
+   :width: 800
+   :align: center
+   :figclass: align-center
+
+   **Figure 3.** A diagram of the method in which missing atoms coordinates are reconstructed during the conformational swaps. In this example, 
+   we construct atoms for the red dummy group (:math:`D_{2, red}`) for the blue molecule configuration. The blue molecule may sometimes contain 
+   alternate dummy groups (:math:`D_{1, blue}`) which will not show up in the new configuration, so these are ignored for the alignment protocol.
