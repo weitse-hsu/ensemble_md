@@ -43,6 +43,14 @@ def test_logger():
         # Reset stdout to the original stream
         sys.stdout = sys.__stdout__
 
+        # Logger.flush() is a no-op, so flush the underlying file object directly to make sure
+        # the written content is actually visible before reading it back.
+        logger.log.flush()
+        log_file.seek(0)
+        content = log_file.read()
+        assert "Hello, world!" in content
+        assert "Testing logger..." in content
+
 
 def test_run_gmx_cmd_success():
     # Mock the subprocess.run return value for a successful execution

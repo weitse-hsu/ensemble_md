@@ -14,7 +14,7 @@ import os
 import pytest
 import numpy as np
 from ensemble_md.analysis import analyze_matrix
-from ensemble_md.utils.exceptions import ParseError
+from ensemble_md.utils.exceptions import ParseError, ParameterError
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 input_path = os.path.join(current_path, "data")
@@ -127,6 +127,15 @@ def test_calc_spectral_gap(capfd):
     out, err = capfd.readouterr()
     assert s is None
     assert 'The input transition matrix is neither right nor left stochastic' in out
+
+    # Case 5: row-stochastic (rows sum to 1) but not a valid probability matrix (has a negative
+    # entry), so its largest eigenvalue isn't close to 1. This should raise a ParameterError.
+    # (This also regression-tests a previous bug where the check used "is False" on the result of
+    # np.isclose(), which is a numpy.bool_ and is never Python's False by identity -- making the
+    # check dead code that could never raise, regardless of input.)
+    mtx = np.array([[1.5, -0.5], [0.3, 0.7]])
+    with pytest.raises(ParameterError, match='is not close to 1'):
+        analyze_matrix.calc_spectral_gap(mtx, n_bootstrap=5)
 
 
 def test_split_transmtx():

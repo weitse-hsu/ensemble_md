@@ -648,6 +648,13 @@ class Test_ReplicaExchangeEE:
         assert np.allclose(avg[0],  [0, 2.55101, 3.35736, 4.83808, 4.8722, 5.89408])
         assert np.allclose(err[0], [0, 1.14542569, 1.0198039, 0.8, 0.69282032, 0.35777088])
 
+        # Calling again with the same log files (so wl_delta is unchanged for every replica)
+        # should extend updating_weights rather than reset it.
+        expected_weights_0 = list(REXEE.updating_weights[0])
+        REXEE.get_averaged_weights(log_files)
+        assert REXEE.current_wl_delta == [0.4, 0.5, 0.5, 0.5]
+        assert REXEE.updating_weights[0] == expected_weights_0 * 2
+
     def test_identify_swappable_pairs(self, params_dict):
         REXEE = get_REXEE_instance(params_dict)
         REXEE.state_ranges = [list(range(i, i + 5)) for i in range(REXEE.n_sim)]  # 5 states per replica
@@ -825,6 +832,54 @@ class Test_ReplicaExchangeEE:
         assert swap_index_accept == [[-1, -1]]
         assert states_modified == states
 
+        # Test 9: random_range proposal (only relevant to MT-REXEE, so modify_coords_fn is always
+        # set and swaps are always accepted). Reuses the random_range fixture from Case 4 of
+        # test_identify_swappable_pairs, where there's only one swappable pair ([0, 1]), so this
+        # exercises get_swapping_pattern's random_range-specific bookkeeping: swap_index_accept
+        # and states_modified are populated from states_for_swap instead of the ordinary
+        # [-1, -1]/unchanged-states path used by every other proposal scheme.
+        random.seed(0)
+        np.random.seed(0)
+        REXEE = get_REXEE_instance(params_dict)
+        REXEE.proposal = 'random_range'
+        REXEE.modify_coords_fn = 'Cool'
+        REXEE.state_ranges = [list(range(i, i + 7)) for i in [0, 7, 14, 21]]
+        REXEE.add_swappables = [[6, 7], [13, 14], [20, 21]]
+        REXEE.n_tot = 28
+        REXEE.s = 7
+        REXEE.n_sim = 4
+        REXEE.template['nstdhdl'] = 100
+        REXEE.template['nstxout'] = 1000
+        states = [5, 7, 13, 25]
+        f = [os.path.join(input_path, f"dhdl/random-range/dhdl_{i}.xvg") for i in range(REXEE.n_sim)]
+        pattern, swap_list, swap_index_accept, states_modified = REXEE.get_swapping_pattern(f, states)
+        assert REXEE.n_swap_attempts == 1
+        assert pattern == [1, 0, 2, 3]
+        assert swap_list == [[0, 1]]
+        assert len(swap_index_accept) == 1
+        assert swap_index_accept[0][0] in [14, 15, 16]
+        assert swap_index_accept[0][1] in [10, 12, 16, 19]
+        assert list(states_modified) == [6, 7, 13, 25]
+
+        # Test 10: a swap is proposed but rejected. Every other test case above only exercises
+        # the "accepted" path, so this checks the complementary "rejected" branch: dhdl_files,
+        # state_ranges, shifts, swap_pattern, and self.configs should all be left untouched, and
+        # the swap should not show up in swap_list.
+        random.seed(0)
+        REXEE = get_REXEE_instance(params_dict)
+        REXEE.proposal = 'single'
+        states = [5, 2, 2, 8]  # swappable pairs: [(0, 1), (0, 2), (1, 2)], swap = (1, 2)
+        f = copy.deepcopy(dhdl_files)
+        with patch.object(REXEE, 'calc_prob_acc', return_value=0):  # forces deterministic rejection  # noqa: E501
+            pattern, swap_list, swap_index_accept, states_modified = REXEE.get_swapping_pattern(f, states)  # noqa: E501
+        assert REXEE.n_swap_attempts == 1
+        assert REXEE.n_rejected == 1
+        assert pattern == [0, 1, 2, 3]
+        assert swap_list == []
+        assert swap_index_accept == []
+        assert states_modified == states
+        assert REXEE.configs == [0, 1, 2, 3]
+
     def test_calc_prob_acc(self, capfd, params_dict):
         # k = 1.380649e-23; NA = 6.0221408e23; T = 298; kT = k * NA * T / 1000 = 2.4777098766670016
         REXEE = get_REXEE_instance(params_dict)
@@ -930,6 +985,24 @@ class Test_ReplicaExchangeEE:
         w_3, g_vec_3 = REXEE.combine_weights(weights)
         assert np.allclose(list(g_vec_3), [0.0, 0.03813, 0.08744, 0.58124, 1.42376, 1.86745, 3.24031, 3.09609, 3.5702, 0.0, 0.26761, 0.12656, 1.28994, 2.58161, 3.40522, 5.14597, 5.1271, 4.71232, 0.0, -0.24036, -0.21415, 0.90212, 1.88597, 3.5445, 4.62079, 4.48149, 4.84671])  # noqa: E501
 
+        # Test 4: one replica (index 1) has already equilibrated, so its weights should be taken
+        # directly from self.equilibrated_weights instead of being recomputed from g_vec. The
+        # other replicas and g_vec itself should be unaffected and match Test 1 exactly.
+        REXEE.n_tot = 6
+        REXEE.n_sub = 4
+        REXEE.s = 1
+        REXEE.n_sim = 3
+        REXEE.state_ranges = [[0, 1, 2, 3], [1, 2, 3, 4], [2, 3, 4, 5]]
+        REXEE.equil = [-1, 100.0, -1]
+        REXEE.equilibrated_weights = [None, [0, 1.5, 2.5, 3.5], None]
+        weights = [[0, 2.1, 4.0, 3.7], [0, 1.7, 1.2, 2.6], [0, -0.4, 0.9, 1.9]]
+        w_4, g_vec_4 = REXEE.combine_weights(weights)
+        assert np.allclose(w_4, [
+            [0, 2.1, 3.9, 3.5],
+            [0, 1.5, 2.5, 3.5],  # taken directly from equilibrated_weights, not recomputed
+            [0, -0.4, 0.95, 1.95]])
+        assert np.allclose(list(g_vec_4), [0, 2.1, 3.9, 3.5, 4.85, 5.85])
+
     def test_histogram_correction(self, params_dict):
         REXEE = get_REXEE_instance(params_dict)
         REXEE.n_tot = 6
@@ -941,6 +1014,13 @@ class Test_ReplicaExchangeEE:
 
         hist_modified = REXEE.histogram_correction(hist)
         assert hist_modified == [[416, 332, 161, 98, 98], [332, 161, 98, 98, 178]]
+
+        # Case 2: a zero histogram count (can happen with poor sampling or right after a WL
+        # incrementor update) makes an adjacent-state ratio inf/nan, so correction should be
+        # skipped and the original histogram returned unchanged.
+        hist_zero = [[0, 332, 130, 71, 61], [303, 181, 123, 143, 260]]
+        hist_modified_zero = REXEE.histogram_correction(hist_zero)
+        assert hist_modified_zero == hist_zero
 
     def test_default_coords_fn(self, params_dict):
         def check_file(true_output, test_output):

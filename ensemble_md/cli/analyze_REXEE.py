@@ -67,7 +67,7 @@ def initialize(args):
                         default='state_trajs_for_sim.npy',
                         help='The file path of the NPY file containing the stitched state-space time series for \
                              different state sets. If the specified file is not found, the code will try to find \
-                             all the time series and stitch them. (Default: state_trajs.npy)')
+                             all the time series and stitch them. (Default: state_trajs_for_sim.npy)')
     parser.add_argument('-d',
                         '--dir',
                         default='analysis',
@@ -364,7 +364,8 @@ def main():
 
         # 3-5. Calculate the spectral gap from the transition matrix of each trajectory
         print('\n3-5. Calculating the spectral gap of the state transition matrices obtained from MSMs ...')
-        spectral_gaps, eig_vals = [analyze_matrix.calc_spectral_gap(mtx) for mtx in mtx_list]
+        results = [analyze_matrix.calc_spectral_gap(mtx) for mtx in mtx_list]  # a list of tuples
+        spectral_gaps = [results[i][0] if None not in results else None for i in range(len(results))]
         for i in range(REXEE.n_sim):
             print(f'       - Trajectory {i}: {spectral_gaps[i]:.3f}')
 
@@ -394,7 +395,7 @@ def main():
         section_idx += 1
         print(f'\n[ Section {section_idx}. Free energy calculations ]')
 
-        if REXEE.modify_coords is False:
+        if REXEE.modify_coords is None:
             # 4-1. Subsampling the data
             data_list = []   # either a list of u_nk or a list of dhdl
             if REXEE.df_data_type == 'u_nk':

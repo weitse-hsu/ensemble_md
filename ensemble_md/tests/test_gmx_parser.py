@@ -13,6 +13,7 @@ here have been automatically tested when testing some of the functions in ensemb
 so here we are just testing the untested part.
 """
 import os
+import re
 import pytest
 import numpy as np
 from ensemble_md.utils import gmx_parser
@@ -20,6 +21,13 @@ from ensemble_md.utils.exceptions import ParseError
 
 current_path = os.path.dirname(os.path.abspath(__file__))
 input_path = os.path.join(current_path, "data")
+
+
+def test_parse_mc_lambda_row_no_count_column():
+    # A row with fewer than 2 integer-looking tokens (i.e. no row index + Count pair) should
+    # raise a clear ParseError instead of silently misidentifying some other column as Count.
+    with pytest.raises(ParseError, match="could not identify the 'Count' column"):
+        gmx_parser._parse_mc_lambda_row(['0.000', '0.250', '1.234'])
 
 
 def test_parse_log():
@@ -61,6 +69,49 @@ def test_parse_log():
     assert counts_3 == [12, 9, 10, 9, 4, 5, 1, 0, 0]
     assert wl_delta_3 is None
     assert equil_time_3 == 0
+
+
+def test_parse_log_case_insensitive_lmc_stats():
+    # lmc-stats = NO (any case) should be recognized as a fixed-weight (Case 3) simulation, not
+    # just the lowercase 'no' that the parser happens to be tested against in test_parse_log.
+    with open(os.path.join(input_path, 'log/case3.log')) as f:
+        content = f.read()
+    content_upper = re.sub(r'(lmc-stats\s*=\s*)no\b', r'\1NO', content)
+    assert content_upper != content  # sanity check that the substitution actually happened
+
+    with open('case3_upper.log', 'w') as f:
+        f.write(content_upper)
+
+    result = gmx_parser.parse_log('case3_upper.log')
+    result_ref = gmx_parser.parse_log(os.path.join(input_path, 'log/case3.log'))
+    assert result == result_ref
+
+    os.remove('case3_upper.log')
+
+
+def test_parse_log_missing_n_lambdas():
+    # A log file that never prints "n-lambdas" should raise a clear ParseError instead of a
+    # cryptic NameError deep inside parsing.
+    with open('malformed.log', 'w') as f:
+        f.write('This is not a real GROMACS log file.\n')
+
+    with pytest.raises(ParseError, match="could not find the parameter 'n-lambdas'"):
+        gmx_parser.parse_log('malformed.log')
+
+    os.remove('malformed.log')
+
+
+def test_parse_log_missing_weight_updating_params():
+    # A log file that has n-lambdas (so it's not immediately rejected) but is missing tinit/dt/
+    # weight-equil-wl-delta, and isn't a fixed-weight (lmc-stats = no) log either, should raise a
+    # clear ParseError instead of a NameError once the code reaches the Case 1/2 parsing branch.
+    with open('malformed.log', 'w') as f:
+        f.write('n-lambdas                      = 6\n')
+
+    with pytest.raises(ParseError, match="could not find 'tinit', 'dt', or 'weight-equil-wl-delta'"):
+        gmx_parser.parse_log('malformed.log')
+
+    os.remove('malformed.log')
 
 
 class Test_MDP:
@@ -132,5 +183,9 @@ def test_read_top():
 
     wrong_resname = ['B2C', 'C2D', 'D2E']
     for resname, top_file in zip(wrong_resname, top_files):
-        with pytest.raises(Exception, match=f'Residue {resname} can not be found in {top_file}'):
-            gmx_parser.read_top(f'{input_path}/coord_swap/{top_file}', resname)
+        # The error message should report the full path passed in (not just the basename), so
+        # a user can tell exactly which file (out of possibly many same-named files in different
+        # directories) failed to parse.
+        full_path = f'{input_path}/coord_swap/{top_file}'
+        with pytest.raises(Exception, match=f'Residue {resname} can not be found in {re.escape(full_path)}'):
+            gmx_parser.read_top(full_path, resname)

@@ -120,8 +120,12 @@ def calc_equil_prob(trans_mtx):
         return None
 
     # The eigenvector corresponding to the eigenvalue eig_vals[i] is eig_vecs[:, i]
-    close_to_1_idx = np.isclose(eig_vals, 1, atol=1e-4)
-    equil_prob = eig_vecs[:, close_to_1_idx]  # note that this is normalized
+    # Note that we pick a single eigenvector (the one whose eigenvalue is closest to 1) instead of
+    # a boolean mask over all eigenvalues close to 1, since poorly-sampled/near-reducible matrices
+    # can have more than one eigenvalue within the tolerance, which would otherwise select multiple
+    # eigenvectors and make the subsequent normalization/real-part extraction ill-defined.
+    close_to_1_idx = np.argmin(np.abs(eig_vals - 1))
+    equil_prob = eig_vecs[:, [close_to_1_idx]]  # note that this is normalized; kept 2D (like the old boolean-mask indexing) for backward compatibility  # noqa: E501
     equil_prob /= np.sum(equil_prob)   # So the sum of all components is 1
     equil_prob = np.array([i.real for i in equil_prob if i.imag == 0])  # get rid of the imaginary part if it is 0
     return equil_prob
@@ -167,7 +171,10 @@ def calc_spectral_gap(trans_mtx, atol=1e-8, n_bootstrap=50, seed=None):
         return None
 
     eig_vals = np.sort(eig_vals)[::-1]  # descending order
-    if np.isclose(eig_vals[0], 1, atol=1e-4) is False:
+    # Note: np.isclose(...) returns a numpy.bool_, which is never Python's False by identity, so
+    # "is False" here was always False regardless of the actual result -- making this check dead
+    # code that could never raise. Use "not" instead, which works correctly on numpy.bool_.
+    if not np.isclose(eig_vals[0], 1, atol=1e-4):
         raise ParameterError(f'The largest eigenvalue of the input transition matrix {eig_vals[0]} is not close to 1.')
 
     spectral_gap = np.abs(eig_vals[0]) - np.abs(eig_vals[1])
@@ -285,15 +292,6 @@ def plot_matrix(matrix, fig_name, title=None, start_idx=0):
     K = len(matrix)
     plt.figure(figsize=(K / 1.5, K / 1.5))     # or figsize=(K / 1.5, K / 1.5)
     annot_matrix = np.zeros([K, K])  # matrix for annotating values
-
-    mask = []
-    for i in range(K):
-        mask.append([])
-        for j in range(len(matrix[0])):
-            if matrix[i][j] < 0.005:
-                mask[-1].append(True)
-            else:
-                mask[-1].append(False)
 
     for i in range(K):
         for j in range(K):

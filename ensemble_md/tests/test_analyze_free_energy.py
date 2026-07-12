@@ -13,6 +13,7 @@ Unit tests for the module analyze_free_energy.py.
 import math
 import pytest
 import numpy as np
+import pandas as pd
 from unittest.mock import patch, call, MagicMock
 from ensemble_md.utils import utils
 from ensemble_md.analysis import analyze_free_energy
@@ -182,6 +183,22 @@ def test_calculate_df_adjacent():
     assert df_err_adjacent == [[0.2, 0.4], [0.3, 0.6]]
 
 
+def test_calculate_df():
+    # Unlike _calculate_df_adjacent (tested above with plain arrays), _calculate_df reassigns
+    # .index/.columns on its input and looks values up with .loc, so it needs a real DataFrame
+    # (matching what alchemlyb estimators actually produce) rather than a bare array or a mock --
+    # this exercises that reindexing/lookup for real instead of only through a mocked call in
+    # test_calculate_free_energy_mtrexee.
+    estimator = MagicMock()
+    estimator.delta_f_ = pd.DataFrame([[0, 1, 2], [1, 0, 3], [2, 3, 0]])
+    estimator.d_delta_f_ = pd.DataFrame([[0, 0.1, 0.2], [0.1, 0, 0.3], [0.2, 0.3, 0]])
+
+    est, err = analyze_free_energy._calculate_df([estimator])
+
+    assert est == 2
+    assert err == 0.2
+
+
 def test_combine_df_adjacent():
     df_adjacent = [[1, 3], [4, 6]]
     df_err_adjacent = [[0.1, 0.1], [0.1, 0.1]]
@@ -240,6 +257,40 @@ def test_calculate_free_energy(mock_calc, mock_combine, mock_apply):
     # Test 3: Invalid err_method
     with pytest.raises(Exception, match='Specified err_method not available.'):
         analyze_free_energy.calculate_free_energy(mock_data, state_ranges, "MBAR", err_method="XYZ")
+
+
+@patch('ensemble_md.analysis.analyze_free_energy._apply_estimators')
+@patch('ensemble_md.analysis.analyze_free_energy._calculate_df')
+def test_calculate_free_energy_mtrexee(mock_calc_df, mock_apply):
+    # MTREXEE mode takes a different code path than the standard REXEE tests above: state_ranges
+    # is a flat list (not a list of lists), df/df_err come from _calculate_df (not
+    # _calculate_df_adjacent + _combine_df_adjacent), and the final f/f_err are just df/df_err
+    # directly (no leading-zero insert or cumulative sum).
+    state_ranges = [0, 1, 2]  # n_tot = state_ranges[-1] + 1 = 3
+    mock_data = [MagicMock()]
+    mock_estimators = [MagicMock()]
+    mock_apply.return_value = mock_estimators
+    mock_calc_df.return_value = ([1.0, 2.0], [0.1, 0.15])
+    for data in mock_data:
+        data.sample.return_value = data
+
+    # Test 1: err_method == "propagate"
+    results = analyze_free_energy.calculate_free_energy(mock_data, state_ranges, "MBAR", err_method="propagate", MTREXEE=True)  # noqa: E501
+    assert results[0] == [1.0, 2.0]
+    assert results[1] == [0.1, 0.15]
+    assert results[2] == mock_estimators
+    mock_calc_df.assert_called_once_with(mock_estimators)
+
+    # Test 2: err_method == "bootstrap". Also exercises the "MTREXEE is True or overlap_bool[i]
+    # is True" check relying on short-circuit evaluation, since overlap_bool is never defined in
+    # the MTREXEE branch.
+    mock_calc_df.reset_mock()
+    mock_calc_df.return_value = ([1.0, 2.0], [0.1, 0.15])  # df/df_err are mutated by the previous test  # noqa: E501
+    results = analyze_free_energy.calculate_free_energy(mock_data, state_ranges, "MBAR", err_method="bootstrap", n_bootstrap=5, seed=0, MTREXEE=True)  # noqa: E501
+    # Since all bootstrap iterations are the same, error_bootstrap should be [0, 0]
+    assert results[0] == [1.0, 2.0]
+    assert results[1] == [0, 0]
+    assert results[2] == mock_estimators
 
 
 def test_calculate_df_rmse():

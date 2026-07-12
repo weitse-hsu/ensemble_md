@@ -1125,8 +1125,13 @@ class ReplicaExchangeEE:
         new_state_0 = states[swap[1]] - shifts[swap[0]]  # new state index (local index in simulation swap[0])
         new_state_1 = states[swap[0]] - shifts[swap[1]]  # new state index (local index in simulation swap[1])
 
-        dU_0 = (dhdl_0[new_state_0] - dhdl_0[old_state_0]) / self.kT  # U^{i}_{n} - U^{i}_{m}, i.e. \Delta U (kT) to the new state  # noqa: E501
-        dU_1 = (dhdl_1[new_state_1] - dhdl_1[old_state_1]) / self.kT  # U^{j}_{m} - U^{j}_{n}, i.e. \Delta U (kT) to the new state  # noqa: E501
+        # dhdl_0/dhdl_1 are indexed by DHDL column-label strings, not integers, so new_state_0/
+        # old_state_0 (local positions within the sliced Series) must be looked up with .iloc,
+        # not []. [] used to silently fall back to positional indexing for an unmatched integer
+        # key, but that fallback is deprecated/removed depending on the pandas version, which is
+        # why this could pass on one pandas version and raise KeyError on another.
+        dU_0 = (dhdl_0.iloc[new_state_0] - dhdl_0.iloc[old_state_0]) / self.kT  # U^{i}_{n} - U^{i}_{m}, i.e. \Delta U (kT) to the new state  # noqa: E501
+        dU_1 = (dhdl_1.iloc[new_state_1] - dhdl_1.iloc[old_state_1]) / self.kT  # U^{j}_{m} - U^{j}_{n}, i.e. \Delta U (kT) to the new state  # noqa: E501
         dU = dU_0 + dU_1
         if self.verbose is True:
             print(
@@ -1297,7 +1302,7 @@ class ReplicaExchangeEE:
                 print(f'  Original weights of rep {i}:\t{[float(f"{k:.3f}") for k in weights[i]]}')
 
             for j in range(1, len(weights[i])):  # loop over the alchemical states
-                if counts[i][j - 1] != 0 and counts[i][j - 1] != 0:
+                if counts[i][j - 1] != 0 and counts[i][j] != 0:
                     if np.min([counts[i][j - 1], counts[i][j]]) > self.N_cutoff:
                         weights[i][j] += np.log(counts[i][j - 1] / counts[i][j])
                     else:
