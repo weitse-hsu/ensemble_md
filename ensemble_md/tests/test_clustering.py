@@ -64,6 +64,17 @@ def test_cluster_traj(mock_gmx, mock_fn_1, mock_fn_2, mock_fn_3, capfd):
         clustering.cluster_traj('gmx', inputs, grps, coupled_only=True, cutoff=0.13, suffix='test')
     mock_gmx.assert_called_once_with(args, prompt_input='q\n')
 
+    # Test 4b: gmx make_ndx itself fails (non-zero return code) -> should raise a clear
+    # ValueError immediately instead of silently proceeding to a later, harder-to-diagnose crash.
+    # (The other four run_gmx_cmd call sites in cluster_traj follow this exact same
+    # "if returncode != 0: raise ValueError(...)" pattern, so this one case covers all of them.)
+    mock_gmx.reset_mock()
+    inputs['index'] = None  # Test 4's successful mocked make_ndx call already set this to 'index.ndx'  # noqa: E501
+    mock_gmx.return_value = (1, MagicMock(), 'some gromacs error')
+    with pytest.raises(ValueError, match='Error with return code 1'):
+        clustering.cluster_traj('gmx', inputs, grps, coupled_only=True, cutoff=0.13, suffix='test')
+    mock_gmx.return_value = (0, MagicMock(), MagicMock())  # restore for the remaining tests
+
     # Test 5: An index file is provided but groups of interest are not found
     mock_gmx.reset_mock()
     inputs['index'] = 'ensemble_md/tests/data/sys.ndx'

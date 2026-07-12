@@ -648,6 +648,13 @@ class Test_ReplicaExchangeEE:
         assert np.allclose(avg[0],  [0, 2.55101, 3.35736, 4.83808, 4.8722, 5.89408])
         assert np.allclose(err[0], [0, 1.14542569, 1.0198039, 0.8, 0.69282032, 0.35777088])
 
+        # Calling again with the same log files (so wl_delta is unchanged for every replica)
+        # should extend updating_weights rather than reset it.
+        expected_weights_0 = list(REXEE.updating_weights[0])
+        REXEE.get_averaged_weights(log_files)
+        assert REXEE.current_wl_delta == [0.4, 0.5, 0.5, 0.5]
+        assert REXEE.updating_weights[0] == expected_weights_0 * 2
+
     def test_identify_swappable_pairs(self, params_dict):
         REXEE = get_REXEE_instance(params_dict)
         REXEE.state_ranges = [list(range(i, i + 5)) for i in range(REXEE.n_sim)]  # 5 states per replica
@@ -853,6 +860,25 @@ class Test_ReplicaExchangeEE:
         assert swap_index_accept[0][0] in [14, 15, 16]
         assert swap_index_accept[0][1] in [10, 12, 16, 19]
         assert list(states_modified) == [6, 7, 13, 25]
+
+        # Test 10: a swap is proposed but rejected. Every other test case above only exercises
+        # the "accepted" path, so this checks the complementary "rejected" branch: dhdl_files,
+        # state_ranges, shifts, swap_pattern, and self.configs should all be left untouched, and
+        # the swap should not show up in swap_list.
+        random.seed(0)
+        REXEE = get_REXEE_instance(params_dict)
+        REXEE.proposal = 'single'
+        states = [5, 2, 2, 8]  # swappable pairs: [(0, 1), (0, 2), (1, 2)], swap = (1, 2)
+        f = copy.deepcopy(dhdl_files)
+        with patch.object(REXEE, 'calc_prob_acc', return_value=0):  # forces deterministic rejection  # noqa: E501
+            pattern, swap_list, swap_index_accept, states_modified = REXEE.get_swapping_pattern(f, states)  # noqa: E501
+        assert REXEE.n_swap_attempts == 1
+        assert REXEE.n_rejected == 1
+        assert pattern == [0, 1, 2, 3]
+        assert swap_list == []
+        assert swap_index_accept == []
+        assert states_modified == states
+        assert REXEE.configs == [0, 1, 2, 3]
 
     def test_calc_prob_acc(self, capfd, params_dict):
         # k = 1.380649e-23; NA = 6.0221408e23; T = 298; kT = k * NA * T / 1000 = 2.4777098766670016

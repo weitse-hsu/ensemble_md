@@ -13,6 +13,7 @@ Unit tests for the module analyze_free_energy.py.
 import math
 import pytest
 import numpy as np
+import pandas as pd
 from unittest.mock import patch, call, MagicMock
 from ensemble_md.utils import utils
 from ensemble_md.analysis import analyze_free_energy
@@ -180,6 +181,22 @@ def test_calculate_df_adjacent():
 
     assert df_adjacent == [[1, 3], [4, 6]]
     assert df_err_adjacent == [[0.2, 0.4], [0.3, 0.6]]
+
+
+def test_calculate_df():
+    # Unlike _calculate_df_adjacent (tested above with plain arrays), _calculate_df reassigns
+    # .index/.columns on its input and looks values up with .loc, so it needs a real DataFrame
+    # (matching what alchemlyb estimators actually produce) rather than a bare array or a mock --
+    # this exercises that reindexing/lookup for real instead of only through a mocked call in
+    # test_calculate_free_energy_mtrexee.
+    estimator = MagicMock()
+    estimator.delta_f_ = pd.DataFrame([[0, 1, 2], [1, 0, 3], [2, 3, 0]])
+    estimator.d_delta_f_ = pd.DataFrame([[0, 0.1, 0.2], [0.1, 0, 0.3], [0.2, 0.3, 0]])
+
+    est, err = analyze_free_energy._calculate_df([estimator])
+
+    assert est == 2
+    assert err == 0.2
 
 
 def test_combine_df_adjacent():
